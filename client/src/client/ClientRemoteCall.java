@@ -1,11 +1,8 @@
 package client;
 
 import javax.naming.InitialContext;
-
-import org.jboss.as.test.multinode.transaction.ClientEjbRemote;
-
+// import org.jboss.as.test.multinode.transaction.ClientEjbRemote;
 import ochaloup.StatelessBeanRemote;
-import serverclient.CallingBeanRemote;
 
 public class ClientRemoteCall {
 
@@ -21,9 +18,13 @@ public class ClientRemoteCall {
 		StatelessBeanRemote bean = (StatelessBeanRemote) initialContext.lookup(lookup);
 		System.out.println(bean.sayHello()); */
 		
-		String lookup = "ejb:/multinode-client_client_client//ClientEjb!" + ClientEjbRemote.class.getName();
+		/* String lookup = "ejb:/multinode-client_client_client//ClientEjb!" + ClientEjbRemote.class.getName();
 		ClientEjbRemote bean = (ClientEjbRemote) initialContext.lookup(lookup);
-		bean.testSameTransactionEachCall();
+		bean.testSameTransactionEachCall(); */
+		
+		String lookup = "ejb:/myejb//StatelessBean!" + StatelessBeanRemote.class.getName();
+		StatelessBeanRemote bean = (StatelessBeanRemote) initialContext.lookup(lookup);
+		bean.localCall();
 		
 		InitialContextUtil.closeInitialContext();
 	}

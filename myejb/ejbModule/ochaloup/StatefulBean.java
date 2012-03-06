@@ -14,15 +14,15 @@ import org.jboss.logging.Logger;
  */
 @LocalBean
 @Stateful
-// @Clustered
+@Clustered
 public class StatefulBean implements StatefulBeanRemote {
 	private static final Logger log = Logger.getLogger(StatefulBean.class);
 
 	private String stringData;
 	private byte[] data;
 	
-	public int createStringData(int mbSize) {
-		int size = 1024 * 1024 * mbSize;
+	public int createStringData(int size) {
+		// int size = 1024 * 1024 * mbSize;
 		log.info("Creating string with size " + size);
 		StringBuilder sb = new StringBuilder(size);
 		for (int i=0; i<size; i++) {
@@ -33,8 +33,8 @@ public class StatefulBean implements StatefulBeanRemote {
 		return stringData.length();
 	}
 
-	public int createData(int mbSize) {
-		int size = mbSize * 1024 * 1024;
+	public int createData(int size) {
+		// int size = mbSize * 1024 * 1024;
 		log.info("Creating byte array with size " + size);
 		data = new byte[size];
 		log.info("["+ Calendar.getInstance().getTimeInMillis() +"] Byte data created: " + data.length);
@@ -47,5 +47,10 @@ public class StatefulBean implements StatefulBeanRemote {
 
 	public int getStringDataSize() {
 		return stringData.length();
+	}
+	
+	public String called() {
+		log.info("I'm called");
+		return "I was called";
 	}
 }

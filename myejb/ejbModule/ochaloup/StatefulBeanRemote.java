@@ -10,4 +10,5 @@ public interface StatefulBeanRemote {
 	int getDataSize();
 	int getStringDataSize();
 	
+	String called();	
 }
