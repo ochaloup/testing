@@ -13,6 +13,7 @@ public class CallingBean implements CallingBeanRemote {
 	private static final String PKG_INTERFACES = "org.jboss.ejb.client.naming";
 	
 	public String call() throws Exception {
+		log.info("I was called...");
 		Context context = null;
         try {
             Properties properties = new Properties();
@@ -20,8 +21,10 @@ public class CallingBean implements CallingBeanRemote {
             context = new InitialContext(properties);
  
             // Lookup the Greeter bean using the ejb: namespace syntax which is explained here https://docs.jboss.org/author/display/AS71/EJB+invocations+from+a+remote+client+using+JNDI
+            final String jndi = "ejb:/myejb//StatelessBean!" + StatelessBeanRemote.class.getName();
+            log.info("Calling: " + jndi);
             final StatelessBeanRemote bean = (StatelessBeanRemote) 
-            		context.lookup("ejb:/myejb//StatelessBean!" + StatelessBeanRemote.class.getName());
+            		context.lookup(jndi);
  
             // invoke on the bean
             final String greeting = bean.sayHello();
