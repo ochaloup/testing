@@ -7,7 +7,7 @@
 			<attribute name="owner.project.facets" value="java"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="con" path="org.eclipse.jst.server.core.container/org.jboss.ide.eclipse.as.core.server.runtime.runtimeTarget/JBoss 7.1 Runtime"/>
-	<classpathentry kind="lib" path="/home/ochaloup/jboss/jboss-as-7/build/target/jboss-as-7.1.2.Final-SNAPSHOT/modules/org/jboss/ejb3/main/jboss-ejb3-ext-api-2.0.0.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jst.server.core.container/org.jboss.ide.eclipse.as.core.server.runtime.runtimeTarget/JBoss 7.2.0 Alpha1 Runtime"/>
+	<classpathentry kind="lib" path="/home/ochaloup/jboss/jboss-as-7/build/target/jboss-as-7.2.0.Alpha1-SNAPSHOT/modules/org/jboss/ejb3/main/jboss-ejb3-ext-api-2.0.0.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

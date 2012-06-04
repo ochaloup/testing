@@ -8,10 +8,12 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
+import ochaloup.ISayHello;
 import ochaloup.StatefulBeanRemote;
+import ochaloup.StatelessBeanRemote;
 
 
-public class ClientStateful {
+public class Client {
 	
     private static InitialContext initialContext;   
     private static final String PKG_INTERFACES = "org.jboss.ejb.client.naming";
@@ -33,13 +35,19 @@ public class ClientStateful {
 	
 	public static void main(String[] args) throws Exception {
 		InitialContext initialContext = getInitialContext();
-		StatefulBeanRemote sb = (StatefulBeanRemote) initialContext.lookup("ejb:/myejb//StatefulBean!ochaloup.StatefulBeanRemote?stateful");
-        
+		
+		ISayHello sayHello = null;
+		if(args.length > 1 && args[0].trim().equals("2")) {
+			sayHello = (StatefulBeanRemote) initialContext.lookup("ejb:/myejb//StatefulBean!ochaloup.StatefulBeanRemote?stateful");
+		} else {
+			sayHello = (StatelessBeanRemote) initialContext.lookup("ejb:/myejb//StatelessBean!ochaloup.StatelessBeanRemote");
+		}
+       
         String a = "";
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        System.out.println("To close the client enter 'q'");
+        System.out.println("Staying before while cycle");
         while(!"q".equals(a.trim())) {
-        	System.out.println(sb.sayHello());
+        	System.out.println(sayHello.sayHello());
             a = br.readLine();
         }
         

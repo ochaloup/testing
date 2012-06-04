@@ -1,5 +1,6 @@
 package ochaloup;
 
+import java.util.Date;
 import java.util.Hashtable;
 
 import javax.ejb.Stateless;
@@ -13,7 +14,7 @@ public class StatelessBean implements StatelessBeanRemote {
 
 	public String sayHello() {
 		log.info("Saying Hello");
-		return "Hello";
+		return NodeNameGetter.getNodeName() +": Hello at " + (new Date()).toString();
 	}
 
 	public void callRemote() {

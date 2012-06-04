@@ -2,6 +2,7 @@ package ochaloup;
 
 
 import java.util.Calendar;
+import java.util.Date;
 
 import javax.ejb.LocalBean;
 import javax.ejb.Stateful;
@@ -11,6 +12,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Session Bean implementation class Stateful
+ * Getting @Clustered annotation: modules/org/jboss/ejb3/main/jboss-ejb3-ext-api-2.0.0-beta-1.jar
  */
 @LocalBean
 @Stateful
@@ -52,5 +54,10 @@ public class StatefulBean implements StatefulBeanRemote {
 	public String called() {
 		log.info("I'm called");
 		return "I was called";
+	}
+	
+	public String sayHello() {
+		log.info("Saying Hello");
+		return NodeNameGetter.getNodeName() +": Hello at " + (new Date()).toString();
 	}
 }
