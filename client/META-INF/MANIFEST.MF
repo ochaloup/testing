@@ -1,3 +1,3 @@
 Manifest-Version: 1.0
-Main-Class: client.ClientMbean
+Main-Class: client.ClientRemoteCall
 Class-Path: .
