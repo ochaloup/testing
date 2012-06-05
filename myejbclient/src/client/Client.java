@@ -37,12 +37,14 @@ public class Client {
 		InitialContext initialContext = getInitialContext();
 		
 		ISayHello sayHello = null;
-		if(args.length > 1 && args[0].trim().equals("2")) {
+		if(args.length >= 1 && (args[0].trim().equals("2") || args[0].trim().equals("stateful"))) {
+			System.out.println("Invoking STATEFUL Bean");
 			sayHello = (StatefulBeanRemote) initialContext.lookup("ejb:/myejb//StatefulBean!ochaloup.StatefulBeanRemote?stateful");
 		} else {
+			System.out.println("Invoking STATELESS Bean");
 			sayHello = (StatelessBeanRemote) initialContext.lookup("ejb:/myejb//StatelessBean!ochaloup.StatelessBeanRemote");
-		}
-       
+		} 
+		
         String a = "";
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         System.out.println("Staying before while cycle");
