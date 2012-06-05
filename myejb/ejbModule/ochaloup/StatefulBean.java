@@ -22,6 +22,7 @@ public class StatefulBean implements StatefulBeanRemote {
 
 	private String stringData;
 	private byte[] data;
+	private Integer helloCounter = 0;
 	
 	public int createStringData(int size) {
 		// int size = 1024 * 1024 * mbSize;
@@ -57,7 +58,8 @@ public class StatefulBean implements StatefulBeanRemote {
 	}
 	
 	public String sayHello() {
-		log.info("Saying Hello");
-		return NodeNameGetter.getNodeName() +": Hello at " + (new Date()).toString();
+		helloCounter++;
+		log.info("Saying Hello [" + helloCounter + "]");
+		return NodeNameGetter.getNodeName() +": Hello [" + helloCounter + "] at " + (new Date()).toString();
 	}
 }
