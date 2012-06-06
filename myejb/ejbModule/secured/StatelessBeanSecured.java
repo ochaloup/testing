@@ -8,9 +8,11 @@ import javax.ejb.Stateless;
 import ochaloup.NodeNameGetter;
 import ochaloup.StatelessBeanRemote;
 
+import org.jboss.ejb3.annotation.Clustered;
 import org.jboss.ejb3.annotation.SecurityDomain;
 import org.jboss.logging.Logger;
 
+@Clustered
 @Stateless
 @SecurityDomain("other")
 public class StatelessBeanSecured implements StatelessBeanRemote {

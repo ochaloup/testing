@@ -6,9 +6,11 @@ import java.util.Hashtable;
 import javax.ejb.Stateless;
 import javax.naming.Context;
 
+import org.jboss.ejb3.annotation.Clustered;
 import org.jboss.logging.Logger;
 
 @Stateless
+@Clustered
 public class StatelessBean implements StatelessBeanRemote {
 	private static final Logger log = Logger.getLogger(StatelessBean.class);
 
