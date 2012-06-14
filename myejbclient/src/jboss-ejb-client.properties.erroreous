@@ -1,7 +1,7 @@
 # For this file works - it's needed to add user under the JBoss - see bin/add-user.sh (ApplicationRealm, test/passowrd)
 remote.connectionprovider.create.options.org.xnio.Options.SSL_ENABLED=false
 
-remote.connections=three,two,one
+remote.connections=two,one
 
 # remote.connection.one.host=${host.ip:192.168.56.101}
 remote.connection.one.host=${host.ip:192.168.56.101}
@@ -17,25 +17,8 @@ remote.connection.two.username=${username:test}
 remote.connection.two.password=${password:password}
 remote.connection.two.connect.options.org.xnio.Options.SASL_POLICY_NOANONYMOUS=false
 remote.connection.two.connect.options.org.xnio.Options.SASL_POLICY_NOPLAINTEXT=false
-# remote.connection.one.connect.options.org.xnio.Options.SASL_DISALLOWED_MECHANISMS=JBOSS-LOCAL-USER
-
-# remote.connection.three.host=${host.ip2:192.168.56.103}
-# remote.connection.three.port=${host.port:4447}
-# remote.connection.three.username=${username:test}
-# remote.connection.three.password=${password:password}
-# remote.connection.three.connect.options.org.xnio.Options.SASL_POLICY_NOANONYMOUS=false
-# remote.connection.three.connect.options.org.xnio.Options.SASL_POLICY_NOPLAINTEXT=false
-# remote.connection.one.connect.options.org.xnio.Options.SASL_DISALLOWED_MECHANISMS=JBOSS-LOCAL-USER
-
-
-# remote.connection.two.host=${host.ip2:192.168.56.102}
-# remote.connection.two.port=${host.port2:4447}
-# remote.connection.two.username=${username:test}
-# remote.connection.two.password=${password:password}
-# remote.connection.two.connect.options.org.xnio.Options.SASL_POLICY_NOANONYMOUS=false
-# remote.connection.two.connect.options.org.xnio.Options.SASL_POLICY_NOPLAINTEXT=false
-# remote.connection.two.connect.options.org.xnio.Options.SASL_DISALLOWED_MECHANISMS=${host.auth:JBOSS-LOCAL-USER}
-
+remote.connection.one.connect.options.org.xnio.Options.SASL_DISALLOWED_MECHANISMS=JBOSS-LOCAL-USER
+# this second connection has to be defined as first one in remote.connetions above
 
 remote.clusters=ejb
 remote.cluster.ejb.connect.options.org.xnio.Options.SASL_POLICY_NOANONYMOUS=false
