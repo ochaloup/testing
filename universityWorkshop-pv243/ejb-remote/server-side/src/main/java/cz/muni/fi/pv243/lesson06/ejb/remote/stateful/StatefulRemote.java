@@ -42,4 +42,5 @@ public interface StatefulRemote {
 	List<String> getStrings();
 	
 	String getNodeName();
+	void remove();
 }

@@ -41,7 +41,7 @@ import java.util.Properties;
  */
 public class StatefulRemoteClient3 {
 	private static List<StatefulRemote> sbList = new ArrayList<StatefulRemote>();
-	private static final int SLEEP_TIME_MS = 1000;
+	private static final int SLEEP_TIME_MS = 200;
 	private static final int DEFAULT_NUM_OF_BEANS_TO_ADD = 50;
 	
 	public static void main(String[] args) throws Exception {
@@ -72,6 +72,8 @@ public class StatefulRemoteClient3 {
 				printRatio();
 			}
 		}
+		
+		removeBeans();
 	}
 
 	/**
@@ -115,5 +117,11 @@ public class StatefulRemoteClient3 {
 			stringBuilder.append(String.format("[%s: %1.2f %%]", nodeName, (sbMap.get(nodeName) * 1.0/total) * 100 ));
 		}
 		System.out.println(stringBuilder);
+	}
+	
+	private static void removeBeans() {
+		for(StatefulRemote sfsb: sbList) {
+			sfsb.remove();
+		}
 	}
 }

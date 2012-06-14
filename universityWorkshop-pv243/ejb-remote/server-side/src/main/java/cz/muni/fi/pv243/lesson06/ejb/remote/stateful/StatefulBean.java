@@ -25,6 +25,8 @@ package cz.muni.fi.pv243.lesson06.ejb.remote.stateful;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.ejb.Remote;
+import javax.ejb.Remove;
 import javax.ejb.Stateful;
 
 import org.jboss.ejb3.annotation.Clustered;
@@ -60,6 +62,11 @@ public class StatefulBean implements StatefulRemote {
 
 	public String getNodeName() {
 		return NodeNameGetter.getNodeName(); 
+	}
+	
+	@Remove
+	public void remove() {
+		log.info("Removing itself: " + this);
 	}
 
 }
