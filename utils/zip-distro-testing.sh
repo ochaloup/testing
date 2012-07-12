@@ -1,7 +1,11 @@
 #! /bin/bash
 
+# Finishing on error of any command in this script
+# set -e 
+
 # what is working directory where all stuff will be put to
 OUTPUT_DIR=`pwd`
+DOWNLOAD_DIR_NAME="downloaded_zip"
 # arguments passed to the script refers to ziped/unpacked EWS distributions
 UNPACKED=0
 # what will be added on classpath of java commands
@@ -11,6 +15,7 @@ EXIT_CODE=0
 # go to debug mode
 IS_DEBUG=
 
+# Declaration of global variables
 declare -a INPUT_PARAMS
 declare -a INPUT_DIRS
 
@@ -21,10 +26,52 @@ function debug() {
   fi
 }
 
-# unzip $file $output_dir 
-function f_unzip() {
-	unzip -q "$1" -d "$2"
-}            
+function just_name() {
+	local FILENAME=`basename "$1"`
+  local RESULT="${FILENAME%.*}"
+
+  if [ "x$2" == "x" ]; then
+  	echo "$RESULT"
+  else
+    eval $2="'$RESULT'"
+  fi
+}
+
+# unzip file output_dir result_var_name
+# creating dir automatically 
+function unzip_with_dir() {
+  just_name "$1" FILENAME_WITHOUT_EXT
+  local OUT_ZIP_DIR="${2}/${FILENAME_WITHOUT_EXT}"
+  mkdir "$OUT_ZIP_DIR"
+  #if [ $? -ne 0 ]; then
+  #	echo "Folder $OUT_ZIP_DIR can't be created and zip file $1 can't be unzipped. Exiting..."
+  #	exit 2
+  #fi
+	echo "Unzipping $1 to $OUT_ZIP_DIR"
+	unzip -oq "$1" -d "$OUT_ZIP_DIR"
+	
+	# returning value with passing value to the variable name in last arg 
+	if [ "x$3" != "x" ]; then
+		eval $3="'$OUT_ZIP_DIR'"
+	fi
+}
+
+# wget_all_linked_zip web_page_link output_dir result_var_name
+# get all zip files from the passed webpage name
+function wget_all_linked_zip() {
+	local TO_DOWN=`echo "$1" | sed "s/^\(.*\)[/]$/\1/"` # strip off the last slash in the address
+	wget -qO /dev/null "$1" # check existence of the page
+	if [ $? -ne 0 ]; then
+		echo "Web page '$1' is not available. Exiting..."
+		exit 2
+	fi
+  wget -qO - "$TO_DOWN" | grep -ioP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\
+  sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
+  while read ZIPFILE; do
+  	wget -P "$2" "${TO_DOWN}/${ZIPFILE}"
+  	break; #TODO - delete
+  done
+}
 
 ######################## START OF EXECUTION ########################
 # Option processing
@@ -95,23 +142,45 @@ if [ $# -lt 1 ]; then
 	echo "The script needs parameter where it can find the zip files."
 	exit 1
 fi
-INPUT_PARAMS=($@)
 
+
+# all rest of params of this script
+INPUT_PARAMS=($@)
+# processing params
 if [ $UNPACKED -gt 0 ]; then
   # already unpacked
   INPUT_DIRS=("${INPUT_PARAMS[@]}")
 else
-  for ARR_ITEM in "${INPUT_PARAMS[@]}"; do
-    # Getting list of ZIPs - checking for file, dir or web address
-    if [ -d "$ZIP_INPUT" ]; then # directory - unzip all zip files
-      for I in *zip; do
-  	    echo $I
+  for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
+  	
+  	# Download web page
+  	if [ ! -d "$LOOP_ITEM" -a ! -s "$LOOP_ITEM" ]; then
+	  	# where zip could be downloaded
+			DIR_TO_DOWNLOAD_ZIPS="$OUTPUT_DIR/$DOWNLOAD_DIR_NAME"
+			if [ ! -d "$DIR_TO_DOWNLOAD_ZIPS" ]; then
+			  mkdir -p "$DIR_TO_DOWNLOAD_ZIPS"
+			fi
+  		# wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
+  		LOOP_ITEM="$DIR_TO_DOWNLOAD_ZIPS"
+  	fi
+  	debug "Processing item from arguments (already processed by web page routine): $LOOP_ITEM"
+  	
+    # Getting list of unzipped directories
+    if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
+      for I in $LOOP_ITEM/*.zip; do
+  	    unzip_with_dir "$I" "$OUTPUT_DIR" UNZIPPED_DIR
+  	    debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+  	    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
       done
-    elif [ -s "$ZIP_INPUT" ]; then
-      echo "This is a file"
+    elif [ -s "$LOOP_ITEM" ]; then
+      unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
+      debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+      INPUT_DIRS=("$UNZIPPED_DIR")
     else 
-      echo "This is not a file"
+      echo "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
+      exit 3   
     fi
-  fi
+    
+  done
 fi
 
