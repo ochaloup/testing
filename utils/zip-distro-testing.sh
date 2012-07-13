@@ -15,6 +15,13 @@ EXIT_CODE=0
 # go to debug mode
 IS_DEBUG=
 
+# Declaration of constants
+TATTLETALE_REPORT_DIR_NAME="tattletale_reports"
+TATTLETALE_SCRIPT="tattletale.groovy"
+SHARE_DIR_NAME="share"
+TOMCAT_DIR_NAME_REGEXP="tomcat-"
+SCRIPT_PATH="$0"
+SCRIPT_DIR=`dirname "$SCRIPT_PATH"`
 # Declaration of global variables
 declare -a INPUT_PARAMS
 declare -a INPUT_DIRS
@@ -69,7 +76,7 @@ function wget_all_linked_zip() {
   sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
   while read ZIPFILE; do
   	wget -P "$2" "${TO_DOWN}/${ZIPFILE}"
-  	break; #TODO - delete
+  	# break; #TODO - delete
   done
 }
 
@@ -78,24 +85,24 @@ function wget_all_linked_zip() {
 #!/bin/sh
 while [ $# -gt 0 ]; do
   case "$1" in
-    -o | --output)
+    -o | -output | --output)
       shift
       OUTPUT_DIR="$1"
       if [ ! -d "$OUTPUT_DIR" ]; then
       	mkdir -p "$OUTPUT_DIR"
       fi
       ;;
-    -u | --unpacked)
+    -u | -unpacked | --unpacked)
       UNPACKED=1
       ;;
-    -cp | --classpath)
+    -cp | -classpath | --classpath)
       shift
       CLASSPATH_ADD="$1"
       ;;
-    -d | -debug)
+    -d | -debug | --debug)
       IS_DEBUG=1
       ;;
-    -dd | --ddebug)
+    -dd | -ddebug | --ddebug)
       IS_DEBUG=1
       set -x
       ;;
@@ -167,7 +174,7 @@ else
   	
     # Getting list of unzipped directories
     if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
-      for I in $LOOP_ITEM/*.zip; do
+      find "$LOOP_ITEM" -iname '*.zip' | while read I; do
   	    unzip_with_dir "$I" "$OUTPUT_DIR" UNZIPPED_DIR
   	    debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
   	    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
@@ -184,3 +191,29 @@ else
   done
 fi
 
+# Do we have something to do?
+if [ ${#INPUT_DIRS[@]} -lt 1 ]; then
+  echo "No files found to process. Exiting..."
+  exit 0 
+fi
+
+# Prepare directory structure
+TATTLETALE_REPORT_DIR="${OUTPUT_DIR}/${TATTLETALE_REPORT_DIR_NAME}"
+mkdir -p "$TATTLETALE_REPORT_DIR"
+rm -rf "${TATTLETALE_REPORT_DIR}/*"
+
+# Process with reports
+for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
+  debug "Processing reports for $DIR_TO_PROCESS" 
+  DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
+  
+  # Tattletale
+  TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
+  mkdir -p "$TATTLETE_OUTPUT" 
+  PATH_TO_SHARE_DIR=`find "$DIR_TO_PROCESS" -type d -name "$SHARE_DIR_NAME"`
+  ls "$PATH_TO_SHARE_DIR" | grep "$TOMCAT_DIR_NAME_REGEXP" | while read TOMCAT_DIR_NAME; do
+    TOMCAT_DIR="${PATH_TO_SHARE_DIR}/${TOMCAT_DIR_NAME}"
+    groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
+    echo "Tattletale report created for $TOMCAT_DIR. Output placed in $TATTLETE_OUTPUT"
+  done
+done
