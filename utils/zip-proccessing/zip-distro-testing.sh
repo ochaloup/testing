@@ -21,7 +21,7 @@ TATTLETALE_SCRIPT="tattletale.groovy"
 SHARE_DIR_NAME="share"
 TOMCAT_DIR_NAME_REGEXP="tomcat-"
 SCRIPT_PATH="$0"
-SCRIPT_DIR=`dirname "$SCRIPT_PATH"`
+SCRIPT_DIR=${0%\/*}
 # Declaration of global variables
 declare -a INPUT_PARAMS
 declare -a INPUT_DIRS
@@ -34,7 +34,7 @@ function debug() {
 }
 
 function just_name() {
-	local FILENAME=`basename "$1"`
+  local FILENAME=`basename "$1"`
   local RESULT="${FILENAME%.*}"
 
   if [ "x$2" == "x" ]; then
@@ -79,6 +79,19 @@ function wget_all_linked_zip() {
   	# break; #TODO - delete
   done
 }
+
+# is the parameter a jar
+is_jar() {
+  JAR_NAME="$1"
+  EXTENSION=`echo ${JAR_NAME##*.} | tr '[:upper:]' '[:lower:]'`
+  file --brief "$JAR_NAME" | grep -iq 'zip archive'
+  if [ $? -eq 0 -a -s "$JAR_NAME" -a "$EXTENSION" = 'jar' ]; then
+    return 0;
+  else
+    return 1
+  fi
+}
+
 
 ######################## START OF EXECUTION ########################
 # Option processing
@@ -200,7 +213,7 @@ fi
 # Prepare directory structure
 TATTLETALE_REPORT_DIR="${OUTPUT_DIR}/${TATTLETALE_REPORT_DIR_NAME}"
 mkdir -p "$TATTLETALE_REPORT_DIR"
-rm -rf "${TATTLETALE_REPORT_DIR}/*"
+rm -rf "$TATTLETALE_REPORT_DIR"/*
 
 # Process with reports
 for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
@@ -213,7 +226,19 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   PATH_TO_SHARE_DIR=`find "$DIR_TO_PROCESS" -type d -name "$SHARE_DIR_NAME"`
   ls "$PATH_TO_SHARE_DIR" | grep "$TOMCAT_DIR_NAME_REGEXP" | while read TOMCAT_DIR_NAME; do
     TOMCAT_DIR="${PATH_TO_SHARE_DIR}/${TOMCAT_DIR_NAME}"
-    groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
-    echo "Tattletale report created for $TOMCAT_DIR. Output placed in $TATTLETE_OUTPUT"
+    # groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
   done
+  echo "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
+  
+  # MD5 checksums
+  MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5"
+  rm -rf "$MD5_REPORT" 
+  find "$DIR_TO_PROCESS" -name '*' | while read I; do
+  	[ -f "$I" ] && md5sum "$I" >> "$MD5_REPORT"
+  done
+  sort -k2 "$MD5_REPORT" > "$MD5_REPORT.tmp"
+  mv -f "$MD5_REPORT.tmp" "$MD5_REPORT"
+  echo "MD5 checksum report created in $MD5_REPORT."
+  
+  # unzip -q "${DIR}/${1}" -d "$TMP_DEST_DIR"
 done
