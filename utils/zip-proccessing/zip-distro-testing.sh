@@ -224,15 +224,15 @@ else
   	
     # Getting list of unzipped directories
     if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
-      find "$LOOP_ITEM" -iname '*.zip' | while read I; do
+      while read I; do
   	    unzip_with_dir "$I" "$OUTPUT_DIR" UNZIPPED_DIR
-  	    debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+        debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
   	    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
-      done
+      done < <(find "$LOOP_ITEM" -iname '*.zip')
     elif [ -s "$LOOP_ITEM" ]; then
       unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
       debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
-      INPUT_DIRS=("$UNZIPPED_DIR")
+      INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
     else 
       eecho "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
       exit 3   
@@ -257,25 +257,32 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
   
   # Tattletale
-  eecho "Processing tattletale report for $DIR_TO_PROCESS"
-  TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
-  mkdir -p "$TATTLETE_OUTPUT" 
+  # Share dir contains tomcat distribution
   PATH_TO_SHARE_DIR=`find "$DIR_TO_PROCESS" -type d -name "$SHARE_DIR_NAME"`
-  ls "$PATH_TO_SHARE_DIR" | grep "$TOMCAT_DIR_NAME_REGEXP" | while read TOMCAT_DIR_NAME; do
-    TOMCAT_DIR="${PATH_TO_SHARE_DIR}/${TOMCAT_DIR_NAME}"
-    groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
-  done
-  eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
+  if [ -d "$PATH_TO_SHARE_DIR" ]; then
+  	eecho "Processing tattletale report for $DIR_TO_PROCESS"
+    TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
+    mkdir -p "$TATTLETE_OUTPUT" 
+    ls "$PATH_TO_SHARE_DIR" | grep "$TOMCAT_DIR_NAME_REGEXP" | while read TOMCAT_DIR_NAME; do
+      TOMCAT_DIR="${PATH_TO_SHARE_DIR}/${TOMCAT_DIR_NAME}"
+      groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
+    done
+    eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
+  fi
   
   # MD5 checksums
   eecho "Calculating checksum for $DIR_TO_PROCESS"
   MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5"
   rm -rf "$MD5_REPORT"
-  calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT"
+  MD5_REPORT_ABS_PATH=`readlink -f "$MD5_REPORT"`
+  touch "$MD5_REPORT_ABS_PATH"
+  cd "$DIR_TO_PROCESS"
+  calculate_md5checksums "./" "$MD5_REPORT_ABS_PATH"
+  cd -
   debug "Deleting temporarily unzipped jar files with suffix $UNZIPED_JAR_DIR_SUFFIX from $DIR_TO_PROCESS"
   find "$DIR_TO_PROCESS" -name "*${UNZIPED_JAR_DIR_SUFFIX}" | xargs rm -rf 
   debug "Sorting $MD5_REPORT..."
-  sort -k2 "$MD5_REPORT" | uniq | > "$MD5_REPORT.tmp"
+  sort -u -k2 "$MD5_REPORT" > "$MD5_REPORT.tmp"
   mv -f "$MD5_REPORT.tmp" "$MD5_REPORT"
   eecho "MD5 checksum report created in $MD5_REPORT."
 done
