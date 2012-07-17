@@ -20,9 +20,9 @@ IS_QUIET=
 # Declaration of constants
 TATTLETALE_REPORT_DIR_NAME="tattletale_reports"
 TATTLETALE_SCRIPT="tattletale.groovy"
-SHARE_DIR_NAME="share"
-TOMCAT_DIR_NAME_REGEXP="tomcat-"
-UNZIPED_JAR_DIR_SUFFIX=".unzippedjar"
+TOMCAT_DIR_NAME_REGEXP='tomcat'
+TOMCAT_DIR_NAME_REXEXP_NOT='doc\|conf'
+UNZIPED_JAR_DIR_SUFFIX=".unzipped"
 SCRIPT_PATH="$0"
 SCRIPT_DIR=${0%\/*}
 # Declaration of global variables
@@ -48,7 +48,19 @@ function just_name() {
   local RESULT="${FILENAME%.*}"
 
   if [ "x$2" == "x" ]; then
-  	eecho "$RESULT"
+  	echo -n "$RESULT"
+  else
+    eval $2="'$RESULT'"
+  fi
+}
+
+trim() {
+  local RESULT=$1
+  RESULT="${RESULT#"${RESULT%%[![:space:]]*}"}" # remove leading whitespace characters
+  RESULT="${RESULT%"${RESULT##*[![:space:]]}"}" # remove trailing whitespace characters
+  
+  if [ "x$2" == "x" ]; then
+    echo -n "$RESULT"
   else
     eval $2="'$RESULT'"
   fi
@@ -107,22 +119,49 @@ is_jar() {
 # calculate md5checksum on the dir recursively in case of jar files
 # param1: dir to process
 # param2: file where the checksums will be added
+# param3: checksum filter regex (it could be e.g. '.*\.jar' or '.*' or nothing then '.*' is taken
+# param4: will we jump to dir by cd (changing pwd)
 calculate_md5checksums() {
   local DIR_TO_PROCESS="$1"
   local MD5_REPORT_FILE="$2"
-  debug "Calculating md5 check sums for $DIR_TO_PROCESS"  
+  trim "$3" FILTER
+  [ -z "$FILTER" ] && FILTER='.*'
+  trim "$4" IS_START_DIR
+  [ "x$IS_START_DIR" == "x" -o "$IS_START_DIR" == "0" ] && IS_START_DIR=
   
-  find "$DIR_TO_PROCESS" -name '*' | while read I; do
+  [ -f "$MD5_REPORT_FILE" ] || touch "$MD5_REPORT_FILE"
+  MD5_REPORT_FILE=`readlink -f "$MD5_REPORT_FILE"` # getting abs filepath
+  debug "calculate_md5checksums params: DIR_TO_PROCESS=$DIR_TO_PROCESS, MD5_REPORT_FILE=$MD5_REPORT_FILE, FILTER=$FILTER,  IS_START_DIR=$IS_START_DIR"
+  
+  if [ "x$IS_START_DIR" != "x" ]; then 
+  	cd "$DIR_TO_PROCESS"
+  	DIR_TO_PROCESS="./"
+  fi
+  
+  find "$DIR_TO_PROCESS" -iregex "$FILTER" | while read I; do
   	if [ -f "$I" ]; then
       md5sum "$I" >> "$MD5_REPORT_FILE"
       is_jar "$I"
       if [ $? -eq 0 ]; then # on jar recursively going down
       	local DIR_TO_UNZIP="${I}${UNZIPED_JAR_DIR_SUFFIX}"
         unzip -oq "$I" -d "$DIR_TO_UNZIP"
-        calculate_md5checksums "$DIR_TO_UNZIP" "$MD5_REPORT_FILE"
+        calculate_md5checksums "$DIR_TO_UNZIP" "$MD5_REPORT_FILE" "$FILTER"
       fi
     fi
   done
+  [ "x$IS_START_DIR" != "x" ] && cd -
+}
+
+# Cleaning directory and md5 report file after its creation
+clean_after_md5calculation() {
+  local DIR_TO_PROCESS="$1"
+  local MD5_REPORT_FILE="$2"
+
+  debug "Deleting temporarily unzipped jar files with suffix $UNZIPED_JAR_DIR_SUFFIX from $DIR_TO_PROCESS"
+  find "$DIR_TO_PROCESS" -name "*${UNZIPED_JAR_DIR_SUFFIX}" | xargs rm -rf 
+  debug "Sorting $MD5_REPORT_FILE..."
+  sort -u -k2 "$MD5_REPORT_FILE" > "$MD5_REPORT_FILE.tmp"
+  mv -f "$MD5_REPORT_FILE.tmp" "$MD5_REPORT_FILE"
 }
 
 
@@ -220,7 +259,7 @@ else
         wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
         LOOP_ITEM="$DIR_TO_DOWNLOAD_ZIPS"
     fi
-    debug "Processing item from arguments (already processed by web page routine): $LOOP_ITEM"
+    debug "Processing item from arguments (after checking by web page routine): $LOOP_ITEM"
   	
     # Getting list of unzipped directories
     if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
@@ -244,7 +283,7 @@ fi
 # Do we have something to do?
 if [ ${#INPUT_DIRS[@]} -lt 1 ]; then
   eecho "No files found to process. Exiting..."
-  exit 0 
+  exit 11
 fi
 
 # Prepare directory structure
@@ -258,31 +297,32 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   
   # Tattletale
   # Share dir contains tomcat distribution
-  PATH_TO_SHARE_DIR=`find "$DIR_TO_PROCESS" -type d -name "$SHARE_DIR_NAME"`
-  if [ -d "$PATH_TO_SHARE_DIR" ]; then
-  	eecho "Processing tattletale report for $DIR_TO_PROCESS"
-    TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
-    mkdir -p "$TATTLETE_OUTPUT" 
-    ls "$PATH_TO_SHARE_DIR" | grep "$TOMCAT_DIR_NAME_REGEXP" | while read TOMCAT_DIR_NAME; do
-      TOMCAT_DIR="${PATH_TO_SHARE_DIR}/${TOMCAT_DIR_NAME}"
-      groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
-    done
-    eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
-  fi
-  
+  eecho "Processing tattletale report for $DIR_TO_PROCESS"
+  TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
+  mkdir -p "$TATTLETE_OUTPUT" 
+  while read TOMCAT_DIR; do
+    echo "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
+    groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
+  done < <( find "$DIR_TO_PROCESS" -type d -name "*$TOMCAT_DIR_NAME_REGEXP*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
+  eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
+
   # MD5 checksums
-  eecho "Calculating checksum for $DIR_TO_PROCESS"
+  eecho "Calculating checksum on directory $DIR_TO_PROCESS"
   MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5"
   rm -rf "$MD5_REPORT"
-  MD5_REPORT_ABS_PATH=`readlink -f "$MD5_REPORT"`
-  touch "$MD5_REPORT_ABS_PATH"
-  cd "$DIR_TO_PROCESS"
-  calculate_md5checksums "./" "$MD5_REPORT_ABS_PATH"
-  cd -
-  debug "Deleting temporarily unzipped jar files with suffix $UNZIPED_JAR_DIR_SUFFIX from $DIR_TO_PROCESS"
-  find "$DIR_TO_PROCESS" -name "*${UNZIPED_JAR_DIR_SUFFIX}" | xargs rm -rf 
-  debug "Sorting $MD5_REPORT..."
-  sort -u -k2 "$MD5_REPORT" > "$MD5_REPORT.tmp"
-  mv -f "$MD5_REPORT.tmp" "$MD5_REPORT"
-  eecho "MD5 checksum report created in $MD5_REPORT."
+  calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*' 1
+  clean_after_md5calculation "$DIR_TO_PROCESS" "$MD5_REPORT"
+  # Filter for .class and .jar files
+  MD5_REPORT_JARS_FILTERED="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
+  cat "$MD5_REPORT" | grep -e '\.class$\|\.jar$' > "$MD5_REPORT_JARS_FILTERED"
+  eecho "MD5 checksum report created in $MD5_REPORT and $MD5_REPORT_JARS_FILTERED" 
+  
+  # MD5 checksum for just for jar files
+  # eecho "Calculating checksum for jar files on directory $DIR_TO_PROCESS"
+  # MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
+  # rm -rf "$MD5_REPORT"
+  # calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*\.jar\|.*\.class' 1
+  # clean_after_md5calculation "$DIR_TO_PROCESS" "$MD5_REPORT"
+  # eecho "MD5 checksum report created in $MD5_REPORT"
 done
+
