@@ -2,7 +2,7 @@
   <property environment="env"/>
   <property name="original" value="${env.DISTDIFF_ORIGINAL}" description="Path to directory which will be compared to new one" />
   <property name="new" value="${env.DISTDIFF_NEW}" description="Path to directory which will be compared with original one" />
-  <property name="groovyjar" value="${env.GROOVY_HOME}/lib/groovy*.jar" description="Path jar of groovy library (-Dgroovyjar=...)" />
+  <property name="groovyjar" value="${env.GROOVY_HOME}/lib/groovy.jar" description="Path jar of groovy library (-Dgroovyjar=...)" />
   <property name="distdiffjar" value="dist-diff/dist-diff.jar" description="Path to dist diff jar (-Ddistdiffjar=...)"/>
 
   <path id="runtime.cp">

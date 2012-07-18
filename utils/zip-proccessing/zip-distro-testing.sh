@@ -1,7 +1,19 @@
 #! /bin/bash
 
 # Finishing on error of any command in this script
-# set -e 
+# set -e
+
+# Paths and others
+SCRIPT_PATH="$0"
+SCRIPT_DIR=${0%\/*}
+QALIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/../qalib/"}
+SVN_INIT_SCRIPT=${SVN_INIT_SCRIPT:-"${QALIB_DIR}/svn-init.sh"}
+DIST_DIFF_INIT_SCRIPT=${DIST_DIFF_INIT_SCRIPT:-"${QALIB_DIR}/dist-diff-init.sh"}
+DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${QALIB_DIR}/dist-diff.xml"}
+TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"tattletale.groovy"}
+ANT_BIN=${ANT_BIN:-ant} # in default taking ant from PATH
+GROOVY_JAR=${GROOVY_JAR:-/usr/share/java/groovy.jar} # path to groovy.jar file 
+                                                     # in case that is not defined, trying to take from dist-diff svn
 
 # what is working directory where all stuff will be put to
 OUTPUT_DIR=`pwd`
@@ -19,12 +31,10 @@ IS_QUIET=
 
 # Declaration of constants
 TATTLETALE_REPORT_DIR_NAME="tattletale_reports"
-TATTLETALE_SCRIPT="tattletale.groovy"
 TOMCAT_DIR_NAME_REGEXP='tomcat'
 TOMCAT_DIR_NAME_REXEXP_NOT='doc\|conf'
+EWS_DIST_NAME_PREFIX='jboss-ews-'
 UNZIPED_JAR_DIR_SUFFIX=".unzipped"
-SCRIPT_PATH="$0"
-SCRIPT_DIR=${0%\/*}
 # Declaration of global variables
 declare -a INPUT_PARAMS
 declare -a INPUT_DIRS
@@ -291,8 +301,10 @@ TATTLETALE_REPORT_DIR="${OUTPUT_DIR}/${TATTLETALE_REPORT_DIR_NAME}"
 mkdir -p "$TATTLETALE_REPORT_DIR"
 rm -rf "$TATTLETALE_REPORT_DIR"/*
 
-# Process with reports
-for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
+
+####################### Tattletale + MD5 reports #######################
+# for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
+for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
   DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
   
   # Tattletale
@@ -304,6 +316,7 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
     echo "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
     groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
   done < <( find "$DIR_TO_PROCESS" -type d -name "*$TOMCAT_DIR_NAME_REGEXP*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
+  # TODO: currently just directories of tomcat is taken for tattletale script - at least maybe symbolic links could be take to aware of
   eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
 
   # MD5 checksums
@@ -326,3 +339,58 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   # eecho "MD5 checksum report created in $MD5_REPORT"
 done
 
+
+####################### DIST DIFF #######################
+# Process dist-diff script on directories with similar content
+which "$ANT_BIN" 2&> /dev/null && [ $? == 0 ] &&\
+  echod "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
+# 
+PREFIXES=
+while read ITEM_FOLDER; do
+  BASE_NAME=`basename "$ITEM_FOLDER"`; #httpd-2.0.0-ER5-RHEL6-x86_64
+  WITHOUT_PREFIX=${BASE_NAME##$EWS_DIST_NAME_PREFIX}; #2.0.0-ER5-RHEL6-x86_64
+  PROCESSING_PREFIX=${WITHOUT_PREFIX%%-*} # 2.0.0
+  echo $PREFIXES | grep "$PROCESSING_PREFIX" > /dev/null # prefixes have to be unique
+  if [ $? != 0 ]; then
+    PREFIXES="$PREFIXES $PROCESSING_PREFIX "
+  fi
+done < <( find "$OUTPUT_DIR" -maxdepth 1 -type d | grep "$EWS_DIST_NAME_PREFIX" )
+debug "Dir prefixes to work with: $PREFIXES"
+
+# Download dist diff script from SVN
+source "$SVN_INIT_SCRIPT"
+source "$DIST_DIFF_INIT_SCRIPT"
+DIST_DIFF_DIR="${OUTPUT_DIR}/dist-diff"
+# property taken DISTDIFF_JAR from the function (function returns value to it) 
+qalib_distdiff_init "$DIST_DIFF_DIR" DISTDIFF_JAR 
+
+# checking existence of groovy jar
+if [ ! -f "$GROOVY_JAR" ]; then
+  GROOVY_JAR="${DIST_DIFF_DIR}/lib/groovy*jar" # trying to find groovy.jar in lib dir of dist-diff script
+  [ ! -f "$GROOVY_JAR" ] &&\
+    echod "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly." &&\
+    exit 1
+fi
+
+# go through prefixes and for the same one do dist diff over each folder to each folder
+for PREFIX in $PREFIXES; do
+  PREFIX_EXPANDED="${OUTPUT_DIR}/${EWS_DIST_NAME_PREFIX}${PREFIX}"
+  debug "Using dir prefix for dist diff: $PREFIX_EXPANDED"
+  for I_OUTER_CYCLE in "$PREFIX_EXPANDED"*; do
+  	# let's process dist diff - let's assume that we have three directories to compare 'a', 'b' and 'c'
+  	# first outer cycle is filled by 'a', the inner cycle gets 'a' and then is_process is set to 1
+  	# and we continue to 'b', 'a' is compared with 'b' and in next cycle with 'c'
+  	# outer_cycle is filled by 'b', the inner cycle continue to next one because of is_process == 0
+  	# then the i outer and inner are equals so is_process is set to 1 and continue to compare 'b' with 'c'
+  	# cycle with c will do nothing
+  	IS_PROCESS=0
+    [ -d "$I_OUTER_CYCLE" ] && for I_INNER_CYCLE in "$PREFIX_EXPANDED"*; do
+      [ "$I_OUTER_CYCLE" == "$I_INNER_CYCLE" ] && IS_PROCESS=1 && continue
+      [ $IS_PROCESS -eq 0 ] && continue 
+      if [ -d "$I_INNER_CYCLE" ]; then
+        eecho "$ANT_BIN -f \"$DIST_DIFF_ANT_XML\" -Dgroovyjar=\"$GROOVY_JAR\" -Ddistdiffjar=\"$DISTDIFF_JAR\""
+        $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR"
+      fi
+    done
+  done
+done
