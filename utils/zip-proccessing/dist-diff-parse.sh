@@ -185,7 +185,7 @@ action_rule_diff() {
       # Directory will be skipped (echoed as debug)
       echod "$RAW_FILENAME is a directory - skipping"
     ;;
-    *ELF*)
+    *ELF*|*PE*executable*)
       # Binary file (echoed as debug)
       echod "$RAW_FILENAME is a binary file - skipping"
     ;;

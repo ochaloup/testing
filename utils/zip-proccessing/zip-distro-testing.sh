@@ -110,7 +110,6 @@ function wget_all_linked_zip() {
   sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
   while read ZIPFILE; do
   	wget -P "$2" "${TO_DOWN}/${ZIPFILE}"
-  	# break; #TODO - delete
   done
 }
 
@@ -189,6 +188,7 @@ while [ $# -gt 0 ]; do
       fi
       ;;
     -u | -unpacked | --unpacked)
+      # TODO: create a possibility for zipped and unzipped files could be passed as arguments together
       UNPACKED=1
       ;;
     -cp | -classpath | --classpath)
@@ -203,18 +203,18 @@ while [ $# -gt 0 ]; do
       set -x
       ;;
     -q | -quiet | --quiet)
+      # TODO: let all external scripts to be affected by this settings (isn't '>/dev/null' enough?)
       IS_QUIET=1
       ;;
-      
+    # TODO: add -classpath argument (?)       
 
     -h | --help)
       echo "Usage:"
       echo `basename $0` " [-ud] [-o output_dir] [-cp classpath_addition] file/dir/web_address"
       echo -e "-u or --unpacked             the arguments are directories which are already unpacked EWS distributions"
-      echo -e "-o or --output dir           output directory"
-      echo -e "-cp or --classpath classes   list of classes split by colon sing as it is normal in Linux."\
-           "This Argument will be added as argument '-cp' of java programs."
-      echo -e "-q or --quiet                quiet - no output messages please"
+      echo -e "                             you can't mix zipped and unzipped files currently"
+      echo -e "-o or --output dir           output directory (when not specifed then current dir will be used)"
+      echo -e "-q or --quiet                quiet - no output messages please (not working properly)"
       echo -e "-d or --debug                debug mode on"
       echo -e "-h or --help                 will show this help"           
       exit $EXIT_CODE
@@ -304,8 +304,7 @@ rm -rf "$TATTLETALE_REPORT_DIR"/*
 
 
 ####################### Tattletale + MD5 reports #######################
-# for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
-for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
+for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
   
   # Tattletale
@@ -314,9 +313,9 @@ for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
   TATTLETE_OUTPUT="${TATTLETALE_REPORT_DIR}/${DIR_TO_PROCESS_BASENAME}"
   mkdir -p "$TATTLETE_OUTPUT" 
   while read TOMCAT_DIR; do
-    echo "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
+    debug "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
     groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
-  done < <( find "$DIR_TO_PROCESS" -type d -name "*$TOMCAT_DIR_NAME_REGEXP*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
+  done < <( find "$DIR_TO_PROCESS" -type d -name "*${TOMCAT_DIR_NAME_REGEXP}*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
   # TODO: currently just directories of tomcat is taken for tattletale script - at least maybe symbolic links could be take to aware of
   eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
 
@@ -330,22 +329,15 @@ for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
   MD5_REPORT_JARS_FILTERED="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
   cat "$MD5_REPORT" | grep -e '\.class$\|\.jar$' > "$MD5_REPORT_JARS_FILTERED"
   eecho "MD5 checksum report created in $MD5_REPORT and $MD5_REPORT_JARS_FILTERED" 
-  
-  # MD5 checksum for just for jar files
-  # eecho "Calculating checksum for jar files on directory $DIR_TO_PROCESS"
-  # MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
-  # rm -rf "$MD5_REPORT"
-  # calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*\.jar\|.*\.class' 1
-  # clean_after_md5calculation "$DIR_TO_PROCESS" "$MD5_REPORT"
-  # eecho "MD5 checksum report created in $MD5_REPORT"
 done
-
 
 ####################### DIST DIFF #######################
 # Process dist-diff script on directories with similar content
 which "$ANT_BIN" 2&> /dev/null && [ $? == 0 ] &&\
   echod "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
-# 
+# To be able to say what is worth to compare between each other we use prefixes of directory names
+# And we compare the same prefixes - currently (July 2012) it seems that EWS will be distributed with 3 "prefixes":
+# jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
 PREFIXES=
 while read ITEM_FOLDER; do
   BASE_NAME=`basename "$ITEM_FOLDER"`; #httpd-2.0.0-ER5-RHEL6-x86_64
