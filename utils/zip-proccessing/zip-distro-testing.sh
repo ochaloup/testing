@@ -1,8 +1,8 @@
 #! /bin/bash
+# Script takes list of zip files or dirs (or a link to html page with zip files)
+# and try to do their comparision
 
-# Finishing on error of any command in this script
-# set -e
-
+# Finishing on error of any command in this script: set -e
 # Paths and others
 SCRIPT_PATH="$0"
 SCRIPT_DIR=${0%\/*}
@@ -19,8 +19,6 @@ GROOVY_JAR=${GROOVY_JAR:-/usr/share/java/groovy.jar} # path to groovy.jar file
 # what is working directory where all stuff will be put to
 OUTPUT_DIR=`pwd`
 DOWNLOAD_DIR_NAME="downloaded_zip"
-# arguments passed to the script refers to ziped/unpacked EWS distributions
-UNPACKED=0
 # what will be added on classpath of java commands
 CLASSPATH_ADD=
 # code that will be used for exiting when st goes to be reason for special exit
@@ -187,10 +185,6 @@ while [ $# -gt 0 ]; do
       	mkdir -p "$OUTPUT_DIR"
       fi
       ;;
-    -u | -unpacked | --unpacked)
-      # TODO: create a possibility for zipped and unzipped files could be passed as arguments together
-      UNPACKED=1
-      ;;
     -cp | -classpath | --classpath)
       shift
       CLASSPATH_ADD="$1"
@@ -211,8 +205,6 @@ while [ $# -gt 0 ]; do
     -h | --help)
       echo "Usage:"
       echo `basename $0` " [-ud] [-o output_dir] [-cp classpath_addition] file/dir/web_address"
-      echo -e "-u or --unpacked             the arguments are directories which are already unpacked EWS distributions"
-      echo -e "                             you can't mix zipped and unzipped files currently"
       echo -e "-o or --output dir           output directory (when not specifed then current dir will be used)"
       echo -e "-q or --quiet                quiet - no output messages please (not working properly)"
       echo -e "-d or --debug                debug mode on"
@@ -253,43 +245,33 @@ fi
 
 # all rest of params of this script
 INPUT_PARAMS=($@)
-# processing params
-if [ $UNPACKED -gt 0 ]; then
-  # already unpacked
-  INPUT_DIRS=("${INPUT_PARAMS[@]}")
-else
-  for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
-  	
-  	# Download web page
-  	if [ ! -d "$LOOP_ITEM" -a ! -s "$LOOP_ITEM" ]; then
-	  	# where zip could be downloaded
-		DIR_TO_DOWNLOAD_ZIPS="$OUTPUT_DIR/$DOWNLOAD_DIR_NAME"
-        if [ ! -d "$DIR_TO_DOWNLOAD_ZIPS" ]; then
-          mkdir -p "$DIR_TO_DOWNLOAD_ZIPS"
-        fi
-        wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
-        LOOP_ITEM="$DIR_TO_DOWNLOAD_ZIPS"
+# --------- processing params --------- 
+for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
+  # Download web page
+  if [ ! -d "$LOOP_ITEM" -a ! -s "$LOOP_ITEM" ]; then
+    # where zip could be downloaded
+    DIR_TO_DOWNLOAD_ZIPS="$OUTPUT_DIR/$DOWNLOAD_DIR_NAME"
+    if [ ! -d "$DIR_TO_DOWNLOAD_ZIPS" ]; then
+      mkdir -p "$DIR_TO_DOWNLOAD_ZIPS"
     fi
-    debug "Processing item from arguments (after checking by web page routine): $LOOP_ITEM"
+    wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
+    LOOP_ITEM="$DIR_TO_DOWNLOAD_ZIPS"
+  fi
+  debug "Processing item from arguments (after checking by web page routine): $LOOP_ITEM"
   	
-    # Getting list of unzipped directories
-    if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
-      while read I; do
-  	    unzip_with_dir "$I" "$OUTPUT_DIR" UNZIPPED_DIR
-        debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
-  	    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
-      done < <(find "$LOOP_ITEM" -iname '*.zip')
-    elif [ -s "$LOOP_ITEM" ]; then
-      unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
-      debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
-      INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
-    else 
-      eecho "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
-      exit 3   
-    fi
-    
-  done
-fi
+  # Getting list of zip and unzipped directories
+  if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
+    INPUT_DIRS[${#INPUT_DIRS[@]}]="$LOOP_ITEM"
+    debug "$LOOP_ITEM is directory"
+  elif [ -s "$LOOP_ITEM" ]; then
+    unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
+    debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
+  else 
+    eecho "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
+    exit 3   
+  fi   
+done
 
 # Do we have something to do?
 if [ ${#INPUT_DIRS[@]} -lt 1 ]; then
