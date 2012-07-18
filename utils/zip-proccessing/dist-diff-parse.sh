@@ -31,6 +31,8 @@ JARS=()
 TMP_DIR=
 IS_DEBUG=
 IN_COLOR=
+IS_SHOW_TEXT_DIFF=
+IS_DECOMPILE=
 
 # ########################## FUNCTIONS ####################################
 echod() {
@@ -181,26 +183,40 @@ action_rule_diff() {
 
   case $TYPE in
     [dD]irectory*) 
-       # Directory will be skipped
-       echod "$RAW_FILENAME is a directory - skipping"
+      # Directory will be skipped (echoed as debug)
+      echod "$RAW_FILENAME is a directory - skipping"
     ;;
     *ELF*)
-      # Binary file
+      # Binary file (echoed as debug)
       echod "$RAW_FILENAME is a binary file - skipping"
     ;;
     *[Jj]ava*) 
-       # TODO: the file should be decompiled and checked on text diff
-       echoc "Java file: $RAW_FILENAME"
+       TO_PRINT="Java file: $RAW_FILENAME"
+       if [ $IS_DECOMPILE ]; then
+         local ORIG_DIR=${FILE_ORIG%/*}
+         local NEW_DIR=${FILE_NEW%/*}
+         local ORIG_BASENAME=`basename "$FILE_ORIG"`
+         local NEW_BASENAME=`basename "$FILE_NEW"`
+         local ORIG_JUST_NAME=${ORIG_BASENAME%.*}
+         local NEW_JUST_NAME=${NEW_BASENAME%.*}
+         local ORIG_JAVA_FILE="${ORIG_DIR}/${ORIG_BASENAME}.java"
+         local NEW_JAVA_FILE="${NEW_DIR}/${NEW_BASENAME}.java"
+         javap -classpath "$ORIG_DIR" "$ORIG_JUST_NAME" > "$ORIG_JAVA_FILE" 
+         javap -classpath "$NEW_DIR" "$NEW_JUST_NAME" > "$NEW_JAVA_FILE"
+         action_diff_text "$ORIG_JAVA_FILE" "$NEW_JAVA_FILE" "$TO_PRINT"
+       else
+         # just echoing that there coud be a difference
+         echoc "$TO_PRINT"
+       fi
     ;;
     *text*) 
-       # need to check
-       echod "Files '$FILE_ORIG' and '$FILE_NEW' are text files - need to check them"
-       diff --strip-trailing-cr "$FILE_ORIG" "$FILE_NEW" > "${TMP_DIR}/${DIFF_FILENAME}"
-       action_diff_text 
-       if [ $? -gt 0 ]; then  # if returns 1
-         echoc "Textfile diff: $RAW_FILENAME"
-         cat "${TMP_DIR}/${DIFF_FILENAME}"
-         echo
+       TO_PRINT="Text file: $RAW_FILENAME"
+       if [ $IS_SHOW_TEXT_DIFF ]; then
+         echod "Files '$FILE_ORIG' and '$FILE_NEW' are text files - need to check them"
+         action_diff_text "$FILE_ORIG" "$FILE_NEW" "$TO_PRINT"
+       else
+         # just echoing that there could be a difference
+         echoc "$TO_PRINT"
        fi
     ;;
     *)
@@ -211,31 +227,47 @@ action_rule_diff() {
 }
 
 action_diff_text() {
-  # if file exists with size greater than zero
-  if [ -s "${TMP_DIR}/${DIFF_FILENAME}" ]; then 
-    return 1
-  else 
-    echod "Nodiff in files..." 
-    return 0 
+  local FILE_ORIG="$1"
+  local FILE_NEW="$2"
+  local TO_PRINT=${3:-`basename $FILE_ORIG`}
+  local TMP_FILE="${TMP_DIR}/${DIFF_FILENAME}"
+  
+  diff --strip-trailing-cr "$FILE_ORIG" "$FILE_NEW" > "$TMP_FILE" 
+
+  if [ -s "$TMP_FILE" ]; then
+  	echo "$TO_PRINT"
+    cat "$TMP_FILE"
+    echo
+  else
+    echod "Nodiff in files $FILE_ORIG and $FILE_NEW" 
   fi
 }
 
 # ########################## START OF EXECUTION ####################################
-while getopts "dhc" opt; do
+while getopts "dhctj" opt; do
   case $opt in
     d) 
-     IS_DEBUG=TRUE 
-     echod "Setting debug printing mode..."
+      IS_DEBUG=TRUE 
+      echod "Setting debug printing mode..."
     ;;
     c) 
-     IN_COLOR=TRUE 
-     echod "Color printing mode..."
+      IN_COLOR=TRUE 
+      echod "Color printing mode..."
+    ;;
+    t)
+      IS_SHOW_TEXT_DIFF=TRUE
+      echod "Text diff will be printed"
+    ;;
+    j)
+      IS_DECOMPILE=TRUE
+      echod "Java files will be decompiled and diffed"
     ;;
     ?)
-     echo "Usage: $0 [-d] [-h] filename"
+     echo "Usage: $0 [-d] [-h] [-t] filename"
      echo "  -d  debug printing mode"
      echo "  -h  prints this help"
      echo "  -c  prints in colors"
+     echo "  -t  prints text diff (in text files or decompiled java files)"
      exit;
     ;;
   esac
