@@ -10,6 +10,7 @@ QALIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/../qalib/"}
 SVN_INIT_SCRIPT=${SVN_INIT_SCRIPT:-"${QALIB_DIR}/svn-init.sh"}
 DIST_DIFF_INIT_SCRIPT=${DIST_DIFF_INIT_SCRIPT:-"${QALIB_DIR}/dist-diff-init.sh"}
 DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${QALIB_DIR}/dist-diff.xml"}
+DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"dist-diff-parse.sh"}
 TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"tattletale.groovy"}
 ANT_BIN=${ANT_BIN:-ant} # in default taking ant from PATH
 GROOVY_JAR=${GROOVY_JAR:-/usr/share/java/groovy.jar} # path to groovy.jar file 
@@ -393,7 +394,8 @@ for PREFIX in $PREFIXES; do
         NEW=`readlink -f "$I_INNER_CYCLE"`
         DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG##*$PREFIX}--VS-${NEW##*$PREFIX}.log"
         $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG"
-        eecho "Dist diff log created in $DIST_DIFF_LOG"  
+        bash "$DIST_DIFF_PARSE_SCRIPT" "$DIST_DIFF_LOG" > "$DIST_DIFF_LOG.parsed"
+        eecho "Dist diff log created in $DIST_DIFF_LOG and $DIST_DIFF_LOG.parsed"
       fi
     done
   done

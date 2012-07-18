@@ -32,7 +32,6 @@ TMP_DIR=
 IS_DEBUG=
 IN_COLOR=
 IS_SHOW_TEXT_DIFF=
-IS_DECOMPILE=
 
 # ########################## FUNCTIONS ####################################
 echod() {
@@ -190,34 +189,24 @@ action_rule_diff() {
       # Binary file (echoed as debug)
       echod "$RAW_FILENAME is a binary file - skipping"
     ;;
-    *[Jj]ava*) 
-       TO_PRINT="Java file: $RAW_FILENAME"
-       if [ $IS_DECOMPILE ]; then
-         local ORIG_DIR=${FILE_ORIG%/*}
-         local NEW_DIR=${FILE_NEW%/*}
-         local ORIG_BASENAME=`basename "$FILE_ORIG"`
-         local NEW_BASENAME=`basename "$FILE_NEW"`
-         local ORIG_JUST_NAME=${ORIG_BASENAME%.*}
-         local NEW_JUST_NAME=${NEW_BASENAME%.*}
-         local ORIG_JAVA_FILE="${ORIG_DIR}/${ORIG_BASENAME}.java"
-         local NEW_JAVA_FILE="${NEW_DIR}/${NEW_BASENAME}.java"
-         javap -classpath "$ORIG_DIR" "$ORIG_JUST_NAME" > "$ORIG_JAVA_FILE" 
-         javap -classpath "$NEW_DIR" "$NEW_JUST_NAME" > "$NEW_JAVA_FILE"
-         action_diff_text "$ORIG_JAVA_FILE" "$NEW_JAVA_FILE" "$TO_PRINT"
-       else
-         # just echoing that there coud be a difference
-         echoc "$TO_PRINT"
-       fi
+    *[Jj]ava*)
+       # Decompile java file and check differencies 
+       local ORIG_DIR=${FILE_ORIG%/*}
+       local NEW_DIR=${FILE_NEW%/*}
+       local ORIG_BASENAME=`basename "$FILE_ORIG"`
+       local NEW_BASENAME=`basename "$FILE_NEW"`
+       local ORIG_JUST_NAME=${ORIG_BASENAME%.*}
+       local NEW_JUST_NAME=${NEW_BASENAME%.*}
+       local ORIG_JAVA_FILE="${ORIG_DIR}/${ORIG_JUST_NAME}.java"
+       local NEW_JAVA_FILE="${NEW_DIR}/${NEW_JUST_NAME}.java"
+       javap -classpath "$ORIG_DIR" "$ORIG_JUST_NAME" > "$ORIG_JAVA_FILE" 
+       javap -classpath "$NEW_DIR" "$NEW_JUST_NAME" > "$NEW_JAVA_FILE"
+       action_diff_text "$ORIG_JAVA_FILE" "$NEW_JAVA_FILE" "Java file: $RAW_FILENAME"
     ;;
     *text*) 
-       TO_PRINT="Text file: $RAW_FILENAME"
-       if [ $IS_SHOW_TEXT_DIFF ]; then
-         echod "Files '$FILE_ORIG' and '$FILE_NEW' are text files - need to check them"
-         action_diff_text "$FILE_ORIG" "$FILE_NEW" "$TO_PRINT"
-       else
-         # just echoing that there could be a difference
-         echoc "$TO_PRINT"
-       fi
+       # Check text file differences
+       echod "Files '$FILE_ORIG' and '$FILE_NEW' are text files - need to check them"
+       action_diff_text "$FILE_ORIG" "$FILE_NEW" "Text file: $RAW_FILENAME"
     ;;
     *)
       # Other types can't be checked
@@ -236,15 +225,14 @@ action_diff_text() {
 
   if [ -s "$TMP_FILE" ]; then
   	echo "$TO_PRINT"
-    cat "$TMP_FILE"
-    echo
+  	[ $IS_SHOW_TEXT_DIFF ] && cat "$TMP_FILE" && echo
   else
     echod "Nodiff in files $FILE_ORIG and $FILE_NEW" 
   fi
 }
 
 # ########################## START OF EXECUTION ####################################
-while getopts "dhctj" opt; do
+while getopts "dhct" opt; do
   case $opt in
     d) 
       IS_DEBUG=TRUE 
@@ -258,16 +246,12 @@ while getopts "dhctj" opt; do
       IS_SHOW_TEXT_DIFF=TRUE
       echod "Text diff will be printed"
     ;;
-    j)
-      IS_DECOMPILE=TRUE
-      echod "Java files will be decompiled and diffed"
-    ;;
     ?)
      echo "Usage: $0 [-d] [-h] [-t] filename"
      echo "  -d  debug printing mode"
      echo "  -h  prints this help"
      echo "  -c  prints in colors"
-     echo "  -t  prints text diff (in text files or decompiled java files)"
+     echo "  -t  prints text diffs (for text files or decompiled java files)"
      exit;
     ;;
   esac
@@ -283,6 +267,7 @@ if [ ! -d "$TMP_DIR" ]; then
 fi
 
 while read line; do 
+  # checking state here
   if check "$line" "$ACTION_REGEXP"; then
     STR_STATE=`echo "$line" | sed "s/${ACTION_REGEXP}/\1/"`
     get_state "$STR_STATE"
@@ -292,14 +277,18 @@ while read line; do
     continue
   fi
   
+  # in case of defined state and existence of directories of comparision 
+  # and the current line contains $FILE_REGEXP pattern - then do check on file
   if [ $STATE != 0 ] && [ -n $ORIG_DIR ] && [ -n $NEW_DIR ] && check "$line" "$FILE_REGEXP"; then
     RAW_FILENAME=`echo "$line" | sed "s/${FILE_REGEXP}/\1/"`
     check_file "$RAW_FILENAME"
     continue
   fi
 
-  # check definition of directory
+  # check definition of directory - especially on first lines (looking e.g. for .*Original dir: path_to_dir) 
+  # we need to know where the files of comparision could be found 
   check_dir "$line"
+  # no other info for what to do - print line
   echo $line
 
 # Bash magic - reading from file (first arg) or from stdin
@@ -307,8 +296,8 @@ while read line; do
 # ${$} is the process id of the current shell.
 done  < "${1:-/proc/${$}/fd/0}"
 
+echo "TMP directory $TMP_DIR was not removed!"
 # if [ -d "$TMP_DIR" ]; then
 #  echo "Removing everything from $TMP_DIR"
 #  rm -rf "$TMP_DIR"
 # fi
-echo "TMP directory $TMP_DIR was not removed!"
