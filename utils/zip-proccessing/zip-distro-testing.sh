@@ -388,8 +388,12 @@ for PREFIX in $PREFIXES; do
       [ "$I_OUTER_CYCLE" == "$I_INNER_CYCLE" ] && IS_PROCESS=1 && continue
       [ $IS_PROCESS -eq 0 ] && continue 
       if [ -d "$I_INNER_CYCLE" ]; then
-        eecho "$ANT_BIN -f \"$DIST_DIFF_ANT_XML\" -Dgroovyjar=\"$GROOVY_JAR\" -Ddistdiffjar=\"$DISTDIFF_JAR\""
-        $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR"
+      	eecho $I_OUTER_CYCLE
+      	ORIG=`readlink -f "$I_OUTER_CYCLE"`
+        NEW=`readlink -f "$I_INNER_CYCLE"`
+        DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG##*$PREFIX}--VS-${NEW##*$PREFIX}.log"
+        $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG"
+        eecho "Dist diff log created in $DIST_DIFF_LOG"  
       fi
     done
   done

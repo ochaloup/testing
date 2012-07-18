@@ -182,7 +182,11 @@ action_rule_diff() {
   case $TYPE in
     [dD]irectory*) 
        # Directory will be skipped
-       echod "$RAW_FILENAME is directory - skipping"
+       echod "$RAW_FILENAME is a directory - skipping"
+    ;;
+    *ELF*)
+      # Binary file
+      echod "$RAW_FILENAME is a binary file - skipping"
     ;;
     *[Jj]ava*) 
        # TODO: the file should be decompiled and checked on text diff
