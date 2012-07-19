@@ -120,11 +120,12 @@ function wget_all_linked_zip() {
 		error "Web page '$1' is not available. Skipping this item."
 		return 2
 	fi
-  wget -qO - "$TO_DOWN" | grep -ioP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\
-  sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
-  while read ZIPFILE; do
-  	wget -N -P "$2" "${TO_DOWN}/${ZIPFILE}"
-  done
+  # grep -ioP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\ solaris does not support option -o
+  wget -qO - "$TO_DOWN" | sed "s/</\n</g" | grep -iP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\
+    sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -iP ".*\.zip$" |\
+    while read ZIPFILE; do
+  	  wget -N -P "$2" "${TO_DOWN}/${ZIPFILE}"
+    done
 }
 
 # is the parameter a jar
