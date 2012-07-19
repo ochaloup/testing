@@ -83,8 +83,8 @@ trim() {
 
 # param1: path to file that will be evaluated whether it is a zip
 is_zip() {
-  FILE_TYPE=`file -b "$1"`
-  FILE_TYPE=${FILE_TYPE,,} # lower case
+  FILE_TYPE=`file -b "$1" | tr [A-Z] [a-z]`
+  # FILE_TYPE=${FILE_TYPE,,} # lower case in bash 4.0
   [[ "$FILE_TYPE" == *zip* ]] && return 0 || return 1 # such a regexp is possible in [[ ]]
 }
 
