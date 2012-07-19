@@ -121,7 +121,7 @@ function wget_all_linked_zip() {
   wget -qO - "$TO_DOWN" | grep -ioP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\
   sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
   while read ZIPFILE; do
-  	wget -P "$2" "${TO_DOWN}/${ZIPFILE}"
+  	wget -N -P "$2" "${TO_DOWN}/${ZIPFILE}"
   done
 }
 
@@ -275,7 +275,6 @@ for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
     fi
     wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
     [ $? -ne 0 ] && continue  # the argument was not a web page
-    
     # unzip all data that were downloaded
     while read I; do
       is_zip "$I"
@@ -288,11 +287,10 @@ for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
         error "Directory $DIR_TO_DOWNLOAD_ZIPS contains a file $I which is not a zip file. Skipping it."
       fi
     done < <(find "$DIR_TO_DOWNLOAD_ZIPS" -type f)
-    
+    # we added names of unzipped dirs for processing so lets continue to other param    
     continue
   fi
-  debug "Processing item from arguments (after checking by web page routine): $LOOP_ITEM"
-  	
+
   # Getting list of zip and unzipped directories
   if [ -d "$LOOP_ITEM" ]; then # directory
     INPUT_DIRS[${#INPUT_DIRS[@]}]="$LOOP_ITEM"
@@ -374,7 +372,7 @@ fi
 
 # Process dist-diff script on directories with similar content filtered by prefix when -p is specifed
 # (July 2012) EWS seems  to be distributed with prefixes: jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
-PREFIXES="*"
+PREFIXES="some_random_temporary_prefix_using_for_for_cycle_to_work"
 if [ $IS_PREFIXES ]; then
   PREFIXES=
   while read ITEM_FOLDER; do
@@ -389,16 +387,16 @@ if [ $IS_PREFIXES ]; then
 fi
 debug "Dir prefixes to work with: $PREFIXES"
 
-
 # in case that we want to use prefixes then the prefix has some string in it and we filter over it
 for PREFIX in $PREFIXES; do
   # prefix filters by the processed folders names
-  PREFIX_EXPANDED=$PREFIX
-  [ $IS_PREFIXES ]	&& PREFIX_EXPANDED="${EWS_DIST_NAME_PREFIX}${PREFIX}"
+  [ $IS_PREFIXES ]	&& PREFIX_EXPANDED="${EWS_DIST_NAME_PREFIX}${PREFIX}" || PREFIX_EXPANDED=""
+  debug "Let's do a dist diff for directories which comply with '$PREFIX_EXPANDED'"
     
   for DIR_OUTER_CYCLE in "${INPUT_DIRS[@]}"; do
   	# [[ ]] supports kind of regular expressions - prefix filtering
   	[[ "$DIR_OUTER_CYCLE" != *$PREFIX_EXPANDED* ]] && continue
+  	debug "Run on outer cycle with: $DIR_OUTER_CYCLE"
   	 
     # let's process dist diff - let's assume that we have three directories to compare 'a', 'b' and 'c'
     # first outer cycle is filled by 'a', the inner cycle gets 'a' and then is_process is set to 1
@@ -406,11 +404,13 @@ for PREFIX in $PREFIXES; do
     # outer_cycle is filled by 'b', the inner cycle continue to next one because of is_process == 0
     # then the i outer and inner are equals so is_process is set to 1 and continue to compare 'b' with 'c'
     # cycle with c will do nothing
+    # INPUT_DIRS_COPY=("${INPUT_DIRS[@]}")  # copy of array
     IS_PROCESS=0
     for DIR_INNER_CYCLE in "${INPUT_DIRS[@]}"; do
-      [[ "$DIR_INNER_CYCLE" != *"$PREFIX_EXPANDED"* ]] && continue  # prefix filtering
+      [[ "$DIR_INNER_CYCLE" != *$PREFIX_EXPANDED* ]] && continue  # prefix filtering
       [ "$DIR_OUTER_CYCLE" == "$DIR_INNER_CYCLE" ] && IS_PROCESS=1 && continue
       [ $IS_PROCESS -eq 0 ] && continue
+      debug "Run on inner cycle with: $DIR_INNER_CYCLE"
       # processing dist diff on folders
       ORIG=`readlink -f "$DIR_OUTER_CYCLE"`
       NEW=`readlink -f "$DIR_INNER_CYCLE"`
