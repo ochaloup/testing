@@ -54,6 +54,10 @@ function eecho() {
   fi
 }
 
+function error() {
+  eecho "[ERROR] $1"
+}
+
 function just_name() {
   local FILENAME=`basename "$1"`
   local RESULT="${FILENAME%.*}"
@@ -77,6 +81,13 @@ trim() {
   fi
 }
 
+# param1: path to file that will be evaluated whether it is a zip
+is_zip() {
+  FILE_TYPE=`file -b "$1"`
+  FILE_TYPE=${FILE_TYPE,,} # lower case
+  [[ "$FILE_TYPE" == *zip* ]] && return 0 || return 1 # such a regexp is possible in [[ ]]
+}
+
 # unzip file output_dir result_var_name
 # creating dir automatically 
 function unzip_with_dir() {
@@ -84,16 +95,17 @@ function unzip_with_dir() {
   local OUT_ZIP_DIR="${2}/${FILENAME_WITHOUT_EXT}"
   mkdir "$OUT_ZIP_DIR"
   #if [ $? -ne 0 ]; then
-  #	eecho "Folder $OUT_ZIP_DIR can't be created and zip file $1 can't be unzipped. Exiting..."
-  #	exit 2
+  #	error "Folder $OUT_ZIP_DIR can't be created and zip file $1 can't be unzipped. Exiting..."
+  #	return 2
   #fi
-	eecho "Unzipping $1 to $OUT_ZIP_DIR"
-	unzip -oq "$1" -d "$OUT_ZIP_DIR"
-	
-	# returning value with passing value to the variable name in last arg 
-	if [ "x$3" != "x" ]; then
-		eval $3="'$OUT_ZIP_DIR'"
-	fi
+  eecho "Unzipping $1 to $OUT_ZIP_DIR"
+  unzip -oq "$1" -d "$OUT_ZIP_DIR"
+  [ $? -ne 0 ] && return 1
+  
+  # returning value with passing value to the variable name in last arg 
+  if [ "x$3" != "x" ]; then
+    eval $3="'$OUT_ZIP_DIR'"
+  fi
 }
 
 # wget_all_linked_zip web_page_link output_dir result_var_name
@@ -103,8 +115,8 @@ function wget_all_linked_zip() {
 	local TO_DOWN=`echo "$1" | sed "s/^\(.*\)[/]$/\1/"` # strip off the last slash in the address
 	wget -qO /dev/null "$1" # check existence of the page
 	if [ $? -ne 0 ]; then
-		eecho "Web page '$1' is not available. Exiting..."
-		exit 2
+		error "Web page '$1' is not available. Skipping this item."
+		return 2
 	fi
   wget -qO - "$TO_DOWN" | grep -ioP "<a\b[^<>]*?\b(href=\s*(?:\"[^\"]*\"|'[^']*'|\S+))" |\
   sed "s/.*href=[ \t'\"]*[\/]*\([^'\"]*\).*/\1/" | grep -ioP ".*\.zip$" |\
@@ -245,7 +257,7 @@ done
 
 debug "Arguments [$#]: $@" #DEBUG
 if [ $# -lt 1 ]; then
-	eecho "The script needs parameter where it can find the zip files."
+	error "The script needs parameter where it can find the zip files."
 	exit 1
 fi
 
@@ -262,34 +274,48 @@ for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
       mkdir -p "$DIR_TO_DOWNLOAD_ZIPS"
     fi
     wget_all_linked_zip "$LOOP_ITEM" "$DIR_TO_DOWNLOAD_ZIPS"
-    LOOP_ITEM="$DIR_TO_DOWNLOAD_ZIPS"
+    [ $? -ne 0 ] && continue  # the argument was not a web page
+    
+    # unzip all data that were downloaded
+    while read I; do
+      is_zip "$I"
+      if [ $? -eq 0 ]; then
+        unzip_with_dir "$I" "$OUTPUT_DIR" UNZIPPED_DIR
+        [ $? -ne 0 ] && error "Not possible to unzip $I" && continue
+        debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+        INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
+      else
+        error "Directory $DIR_TO_DOWNLOAD_ZIPS contains a file $I which is not a zip file. Skipping it."
+      fi
+    done < <(find "$DIR_TO_DOWNLOAD_ZIPS" -type f)
+    
+    continue
   fi
   debug "Processing item from arguments (after checking by web page routine): $LOOP_ITEM"
   	
   # Getting list of zip and unzipped directories
-  if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
+  if [ -d "$LOOP_ITEM" ]; then # directory
     INPUT_DIRS[${#INPUT_DIRS[@]}]="$LOOP_ITEM"
     debug "$LOOP_ITEM is directory"
   elif [ -a "$LOOP_ITEM" ]; then
-    FILE_TYPE=`file -b "$LOOP_ITEM"`
-    FILE_TYPE=${FILE_TYPE,,} # lower case
-    if [[ "$FILE_TYPE" == *zip* ]]; then 
+    is_zip "$LOOP_ITEM" 
+    if [ $? -eq 0 ]; then
       unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
+      [ $? -ne 0 ] && error "Not possible to unzip $LOOP_ITEM. Skipping it." && continue
       debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
       INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
     else
-      eecho "The item to process ($LOOP_ITEM) is a file but it's not a zip file. Skipping it."
+      error "The item to process ($LOOP_ITEM) is a file but it's not a zip file. Skipping it."
     fi
   else 
-    eecho "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
+    error "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting this script."
     exit 3   
   fi   
 done
 
-
 # Do we have something to do?
 if [ ${#INPUT_DIRS[@]} -lt 1 ]; then
-  eecho "No files found to process. Exiting..."
+  error "No files found to process. Exiting this script."
   exit 11
 fi
 
@@ -329,7 +355,7 @@ done
 
 ####################### DIST DIFF #######################
 which "$ANT_BIN" 2&> /dev/null && [ $? == 0 ] &&\
-  eecho "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
+  error "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
 
 # Download dist diff script from SVN
 source "$SVN_INIT_SCRIPT"
@@ -342,7 +368,7 @@ qalib_distdiff_init "$DIST_DIFF_DIR" DISTDIFF_JAR
 if [ ! -f "$GROOVY_JAR" ]; then
   GROOVY_JAR="${DIST_DIFF_DIR}/lib/groovy*jar" # trying to find groovy.jar in lib dir of dist-diff script
   [ ! -f "$GROOVY_JAR" ] &&\
-    eecho "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly." &&\
+    error "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly. Exiting the script." &&\
     exit 1
 fi
 
