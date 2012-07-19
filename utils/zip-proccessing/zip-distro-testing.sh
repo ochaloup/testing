@@ -1,9 +1,10 @@
 #! /bin/bash
 # Script takes list of zip files or dirs (or a link to html page with zip files)
-# and try to do their comparision
-# Exiting script on any non-zero return value from any command: set -e
+# and try to generate reports about them (plus compare them)
+
 
 # Paths and others
+# set -e
 SCRIPT_PATH="$0"
 SCRIPT_DIR=${0%\/*}
 QALIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/../qalib/"}
@@ -13,6 +14,7 @@ DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${QALIB_DIR}/dist-diff.xml"}
 DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"dist-diff-parse.sh"}
 TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"tattletale.groovy"}
 ANT_BIN=${ANT_BIN:-ant} # in default taking ant from PATH
+GROOVY_BIN=${GROOVY_BIN:-groovy}
 GROOVY_JAR=${GROOVY_JAR:-/usr/share/java/groovy.jar} # path to groovy.jar file 
                                                      # in case that is not defined, trying to take from dist-diff svn
 
@@ -334,7 +336,7 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   mkdir -p "$TATTLETE_OUTPUT" 
   while read TOMCAT_DIR; do
     debug "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
-    groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
+    ${GROOVY_BIN} -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
   done < <( find "$DIR_TO_PROCESS" -type d -name "*${TOMCAT_DIR_NAME_REGEXP}*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
   # TODO: currently just directories of tomcat is taken for tattletale script - think about this
   eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
