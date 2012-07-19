@@ -136,15 +136,19 @@ unzip_jar() {
   JAR_NAME="$1"
   TMP_STATE_DIR="$2"
 
-  if [ ! -d "$TMP_DIR" ]; then
-    TMP_DIR=`mktemp -d --suffix="#distdiff"`
-    echod "Tmp dir created: ${TMP_DIR}"
-  fi
+  create_tmp_dir
 
   # data unzipping
   TMP_DEST_DIR="${TMP_DIR}/${TMP_STATE_DIR}/${JAR_NAME}"
   mkdir -p "$TMP_DEST_DIR"
   unzip -q "${DIR}/${1}" -d "$TMP_DEST_DIR"
+}
+
+create_tmp_dir() {
+  if [ ! -d "$TMP_DIR" ]; then
+    TMP_DIR=`mktemp -d --suffix="#distdiff"`
+    echod "Tmp dir created: ${TMP_DIR}"
+  fi
 }
 
 get_type() {
@@ -261,10 +265,7 @@ shift $(( OPTIND - 1 ))
 # echo "[otheropts]==> $@"
 
 # Creating tmp dir where files will be unzipped and diffed
-if [ ! -d "$TMP_DIR" ]; then
-  TMP_DIR=`mktemp -d --suffix="#distdiff"`
-  echod "Tmp dir created: ${TMP_DIR}"
-fi
+create_tmp_dir
 
 while read line; do 
   # checking state here
@@ -296,8 +297,8 @@ while read line; do
 # ${$} is the process id of the current shell.
 done  < "${1:-/proc/${$}/fd/0}"
 
-echo "TMP directory $TMP_DIR was not removed!"
-# if [ -d "$TMP_DIR" ]; then
-#  echo "Removing everything from $TMP_DIR"
-#  rm -rf "$TMP_DIR"
-# fi
+# echo "TMP directory $TMP_DIR was not removed!"
+if [ -d "$TMP_DIR" ]; then
+ echo "Removing everything from $TMP_DIR"
+ rm -rf "$TMP_DIR"
+fi

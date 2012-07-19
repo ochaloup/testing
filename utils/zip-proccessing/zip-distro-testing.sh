@@ -1,8 +1,8 @@
 #! /bin/bash
 # Script takes list of zip files or dirs (or a link to html page with zip files)
 # and try to do their comparision
+# Exiting script on any non-zero return value from any command: set -e
 
-# Finishing on error of any command in this script: set -e
 # Paths and others
 SCRIPT_PATH="$0"
 SCRIPT_DIR=${0%\/*}
@@ -50,7 +50,7 @@ function debug() {
 # echo function which respects IS_QUIET flag
 function eecho() {
  if [ "x$IS_QUIET" == "x" ]; then
-    echo "$1"
+    echo -e "$1"
   fi
 }
 
@@ -209,10 +209,12 @@ while [ $# -gt 0 ]; do
 
     -h | --help)
       echo "Usage:"
-      echo `basename $0` " [-ud] [-o output_dir] [-cp classpath_addition] file/dir/web_address"
+      echo `basename $0` " [-udph] [-o output_dir] zip_file/dir/web_address"
       echo -e "-o or --output dir           output directory (when not specifed then current dir will be used)"
       echo -e "-q or --quiet                quiet - no output messages please (not working properly)"
       echo -e "-d or --debug                debug mode on"
+      echo -e "-p or --prefix               tries to run dist-diff on directories with the same content (just a try)"
+      echo -e "                             probably you need to check usage of variable EWS_DIST_NAME_PREFIX in this script"
       echo -e "-h or --help                 will show this help"           
       exit $EXIT_CODE
       ;;   
@@ -253,7 +255,7 @@ INPUT_PARAMS=($@)
 # --------- processing params --------- 
 for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
   # Download web page
-  if [ ! -d "$LOOP_ITEM" -a ! -s "$LOOP_ITEM" ]; then
+  if [ ! -d "$LOOP_ITEM" -a ! -a "$LOOP_ITEM" ]; then
     # where zip could be downloaded
     DIR_TO_DOWNLOAD_ZIPS="$OUTPUT_DIR/$DOWNLOAD_DIR_NAME"
     if [ ! -d "$DIR_TO_DOWNLOAD_ZIPS" ]; then
@@ -268,15 +270,22 @@ for LOOP_ITEM in "${INPUT_PARAMS[@]}"; do
   if [ -d "$LOOP_ITEM" ]; then # directory - unzip all zip files
     INPUT_DIRS[${#INPUT_DIRS[@]}]="$LOOP_ITEM"
     debug "$LOOP_ITEM is directory"
-  elif [ -s "$LOOP_ITEM" ]; then
-    unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
-    debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
-    INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
+  elif [ -a "$LOOP_ITEM" ]; then
+    FILE_TYPE=`file -b "$LOOP_ITEM"`
+    FILE_TYPE=${FILE_TYPE,,} # lower case
+    if [[ "$FILE_TYPE" == *zip* ]]; then 
+      unzip_with_dir "$LOOP_ITEM" "$OUTPUT_DIR" UNZIPPED_DIR
+      debug "Returned unzipped dir $UNZIPPED_DIR" #DEBUG
+      INPUT_DIRS[${#INPUT_DIRS[@]}]="$UNZIPPED_DIR"
+    else
+      eecho "The item to process ($LOOP_ITEM) is a file but it's not a zip file. Skipping it."
+    fi
   else 
     eecho "The item to process ($LOOP_ITEM) is neither file nor directory. Exiting..."
     exit 3   
   fi   
 done
+
 
 # Do we have something to do?
 if [ ${#INPUT_DIRS[@]} -lt 1 ]; then
@@ -291,7 +300,7 @@ rm -rf "$TATTLETALE_REPORT_DIR"/*
 
 
 ####################### Tattletale + MD5 reports #######################
-for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
+for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
   DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
   
   # Tattletale
@@ -303,14 +312,14 @@ for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
     debug "groovy -Doutput=\"$TATTLETE_OUTPUT\" -Dtestdir=\"$TOMCAT_DIR\" \"${SCRIPT_DIR}/${TATTLETALE_SCRIPT}\""
     groovy -Doutput="$TATTLETE_OUTPUT" -Dtestdir="$TOMCAT_DIR" "${SCRIPT_DIR}/${TATTLETALE_SCRIPT}"
   done < <( find "$DIR_TO_PROCESS" -type d -name "*${TOMCAT_DIR_NAME_REGEXP}*" | grep -v -e "$TOMCAT_DIR_NAME_REXEXP_NOT" )
-  # TODO: currently just directories of tomcat is taken for tattletale script - at least maybe symbolic links could be take to aware of
+  # TODO: currently just directories of tomcat is taken for tattletale script - think about this
   eecho "Tattletale report created for $DIR_TO_PROCESS. Output placed in $TATTLETE_OUTPUT"
 
   # MD5 checksums
   eecho "Calculating checksum on directory $DIR_TO_PROCESS"
   MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5"
   rm -rf "$MD5_REPORT"
-  calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*' 1
+  calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*' 1  # all files (.*) and DIR_TO_PROCESS is root dir (1)
   clean_after_md5calculation "$DIR_TO_PROCESS" "$MD5_REPORT"
   # Filter for .class and .jar files
   MD5_REPORT_JARS_FILTERED="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
@@ -320,9 +329,7 @@ done
 
 ####################### DIST DIFF #######################
 which "$ANT_BIN" 2&> /dev/null && [ $? == 0 ] &&\
-  echod "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
-
-# TODO: using prefixes is not right every time - use some argument which switch
+  eecho "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
 
 # Download dist diff script from SVN
 source "$SVN_INIT_SCRIPT"
@@ -335,15 +342,12 @@ qalib_distdiff_init "$DIST_DIFF_DIR" DISTDIFF_JAR
 if [ ! -f "$GROOVY_JAR" ]; then
   GROOVY_JAR="${DIST_DIFF_DIR}/lib/groovy*jar" # trying to find groovy.jar in lib dir of dist-diff script
   [ ! -f "$GROOVY_JAR" ] &&\
-    echod "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly." &&\
+    eecho "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly." &&\
     exit 1
 fi
 
-# Process dist-diff script on directories with similar content
-# Prefixes won't be used when argument - 
-# To be able to say what is worth to compare between each other we use prefixes of directory names
-# And we compare the same prefixes - currently (July 2012) it seems that EWS will be distributed with 3 "prefixes":
-# jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
+# Process dist-diff script on directories with similar content filtered by prefix when -p is specifed
+# (July 2012) EWS seems  to be distributed with prefixes: jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
 PREFIXES="*"
 if [ $IS_PREFIXES ]; then
   PREFIXES=
@@ -381,37 +385,19 @@ for PREFIX in $PREFIXES; do
       [[ "$DIR_INNER_CYCLE" != *"$PREFIX_EXPANDED"* ]] && continue  # prefix filtering
       [ "$DIR_OUTER_CYCLE" == "$DIR_INNER_CYCLE" ] && IS_PROCESS=1 && continue
       [ $IS_PROCESS -eq 0 ] && continue
-      echo "$DIR_OUTER_CYCLE and $DIR_INNER_CYCLE"
+      # processing dist diff on folders
+      ORIG=`readlink -f "$DIR_OUTER_CYCLE"`
+      NEW=`readlink -f "$DIR_INNER_CYCLE"`
+      eecho "\n--------------------------------"
+      eecho "DIST DIFF between $ORIG and $NEW:" 
+      ORIG_BASENAME=`basename "$ORIG"`
+      NEW_BASENAME=`basename "$NEW"`
+      DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG_BASENAME}--VS-${NEW_BASENAME}.log"
+      $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG"
+      bash "$DIST_DIFF_PARSE_SCRIPT" -t "$DIST_DIFF_LOG" > "$DIST_DIFF_LOG.parsed"
+      eecho "Dist diff LOG created in $DIST_DIFF_LOG and $DIST_DIFF_LOG.parsed"
+      eecho "--------------------------------\n"
     done
   done
   
-done
-exit
-
-# go through prefixes and for the same one do dist diff over each folder to each folder
-for PREFIX in $PREFIXES; do
-  PREFIX_EXPANDED="${OUTPUT_DIR}/${EWS_DIST_NAME_PREFIX}${PREFIX}"
-  debug "Using dir prefix for dist diff: $PREFIX_EXPANDED"
-  for I_OUTER_CYCLE in "$PREFIX_EXPANDED"*; do
-  	# let's process dist diff - let's assume that we have three directories to compare 'a', 'b' and 'c'
-  	# first outer cycle is filled by 'a', the inner cycle gets 'a' and then is_process is set to 1
-  	# and we continue to 'b', 'a' is compared with 'b' and in next cycle with 'c'
-  	# outer_cycle is filled by 'b', the inner cycle continue to next one because of is_process == 0
-  	# then the i outer and inner are equals so is_process is set to 1 and continue to compare 'b' with 'c'
-  	# cycle with c will do nothing
-  	IS_PROCESS=0
-    [ -d "$I_OUTER_CYCLE" ] && for I_INNER_CYCLE in "$PREFIX_EXPANDED"*; do
-      [ "$I_OUTER_CYCLE" == "$I_INNER_CYCLE" ] && IS_PROCESS=1 && continue
-      [ $IS_PROCESS -eq 0 ] && continue 
-      if [ -d "$I_INNER_CYCLE" ]; then
-      	eecho $I_OUTER_CYCLE
-      	ORIG=`readlink -f "$I_OUTER_CYCLE"`
-        NEW=`readlink -f "$I_INNER_CYCLE"`
-        DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG##*$PREFIX}--VS-${NEW##*$PREFIX}.log"
-        $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG"
-        bash "$DIST_DIFF_PARSE_SCRIPT" "$DIST_DIFF_LOG" > "$DIST_DIFF_LOG.parsed"
-        eecho "Dist diff log created in $DIST_DIFF_LOG and $DIST_DIFF_LOG.parsed"
-      fi
-    done
-  done
 done
