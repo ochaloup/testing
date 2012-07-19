@@ -27,6 +27,8 @@ EXIT_CODE=0
 IS_DEBUG=
 # quiet mode
 IS_QUIET=
+# use prefixes (try to detect similar folders to use for dist diff)
+IS_PREFIXES=
 
 # Declaration of constants
 TATTLETALE_REPORT_DIR_NAME="tattletale_reports"
@@ -200,6 +202,9 @@ while [ $# -gt 0 ]; do
       # TODO: let all external scripts to be affected by this settings (isn't '>/dev/null' enough?)
       IS_QUIET=1
       ;;
+    -p | -prefix | --prefix)
+      IS_PREFIXES=1
+      ;;
     # TODO: add -classpath argument (?)       
 
     -h | --help)
@@ -286,7 +291,7 @@ rm -rf "$TATTLETALE_REPORT_DIR"/*
 
 
 ####################### Tattletale + MD5 reports #######################
-for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
+for DIR_TO_PROCESS in "${INPUT_DIRSS[@]}"; do
   DIR_TO_PROCESS_BASENAME=`basename "${DIR_TO_PROCESS}"`
   
   # Tattletale
@@ -314,23 +319,10 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
 done
 
 ####################### DIST DIFF #######################
-# Process dist-diff script on directories with similar content
 which "$ANT_BIN" 2&> /dev/null && [ $? == 0 ] &&\
   echod "Ant command was not found on $ANT_BIN. Set ANT_BIN env variable correctly." && exit 1
-# To be able to say what is worth to compare between each other we use prefixes of directory names
-# And we compare the same prefixes - currently (July 2012) it seems that EWS will be distributed with 3 "prefixes":
-# jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
-PREFIXES=
-while read ITEM_FOLDER; do
-  BASE_NAME=`basename "$ITEM_FOLDER"`; #httpd-2.0.0-ER5-RHEL6-x86_64
-  WITHOUT_PREFIX=${BASE_NAME##$EWS_DIST_NAME_PREFIX}; #2.0.0-ER5-RHEL6-x86_64
-  PROCESSING_PREFIX=${WITHOUT_PREFIX%%-*} # 2.0.0
-  echo $PREFIXES | grep "$PROCESSING_PREFIX" > /dev/null # prefixes have to be unique
-  if [ $? != 0 ]; then
-    PREFIXES="$PREFIXES $PROCESSING_PREFIX "
-  fi
-done < <( find "$OUTPUT_DIR" -maxdepth 1 -type d | grep "$EWS_DIST_NAME_PREFIX" )
-debug "Dir prefixes to work with: $PREFIXES"
+
+# TODO: using prefixes is not right every time - use some argument which switch
 
 # Download dist diff script from SVN
 source "$SVN_INIT_SCRIPT"
@@ -346,6 +338,55 @@ if [ ! -f "$GROOVY_JAR" ]; then
     echod "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly." &&\
     exit 1
 fi
+
+# Process dist-diff script on directories with similar content
+# Prefixes won't be used when argument - 
+# To be able to say what is worth to compare between each other we use prefixes of directory names
+# And we compare the same prefixes - currently (July 2012) it seems that EWS will be distributed with 3 "prefixes":
+# jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
+PREFIXES="*"
+if [ $IS_PREFIXES ]; then
+  PREFIXES=
+  while read ITEM_FOLDER; do
+    BASE_NAME=`basename "$ITEM_FOLDER"`; #httpd-2.0.0-ER5-RHEL6-x86_64
+    WITHOUT_PREFIX=${BASE_NAME##$EWS_DIST_NAME_PREFIX}; #2.0.0-ER5-RHEL6-x86_64
+    PROCESSING_PREFIX=${WITHOUT_PREFIX%%-*} # 2.0.0
+    echo $PREFIXES | grep "$PROCESSING_PREFIX" > /dev/null # prefixes have to be unique
+    if [ $? != 0 ]; then
+      PREFIXES="$PREFIXES $PROCESSING_PREFIX "
+    fi
+  done < <( find "$OUTPUT_DIR" -maxdepth 1 -type d | grep "$EWS_DIST_NAME_PREFIX" )
+fi
+debug "Dir prefixes to work with: $PREFIXES"
+
+
+# in case that we want to use prefixes then the prefix has some string in it and we filter over it
+for PREFIX in $PREFIXES; do
+  # prefix filters by the processed folders names
+  PREFIX_EXPANDED=$PREFIX
+  [ $IS_PREFIXES ]	&& PREFIX_EXPANDED="${EWS_DIST_NAME_PREFIX}${PREFIX}"
+    
+  for DIR_OUTER_CYCLE in "${INPUT_DIRS[@]}"; do
+  	# [[ ]] supports kind of regular expressions - prefix filtering
+  	[[ "$DIR_OUTER_CYCLE" != *$PREFIX_EXPANDED* ]] && continue
+  	 
+    # let's process dist diff - let's assume that we have three directories to compare 'a', 'b' and 'c'
+    # first outer cycle is filled by 'a', the inner cycle gets 'a' and then is_process is set to 1
+    # and we continue to 'b', 'a' is compared with 'b' and in next cycle with 'c'
+    # outer_cycle is filled by 'b', the inner cycle continue to next one because of is_process == 0
+    # then the i outer and inner are equals so is_process is set to 1 and continue to compare 'b' with 'c'
+    # cycle with c will do nothing
+    IS_PROCESS=0
+    for DIR_INNER_CYCLE in "${INPUT_DIRS[@]}"; do
+      [[ "$DIR_INNER_CYCLE" != *"$PREFIX_EXPANDED"* ]] && continue  # prefix filtering
+      [ "$DIR_OUTER_CYCLE" == "$DIR_INNER_CYCLE" ] && IS_PROCESS=1 && continue
+      [ $IS_PROCESS -eq 0 ] && continue
+      echo "$DIR_OUTER_CYCLE and $DIR_INNER_CYCLE"
+    done
+  done
+  
+done
+exit
 
 # go through prefixes and for the same one do dist diff over each folder to each folder
 for PREFIX in $PREFIXES; do
