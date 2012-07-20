@@ -1,18 +1,20 @@
 #! /bin/bash
 # Script takes list of zip files or dirs (or a link to html page with zip files)
 # and try to generate reports about them (plus compare them)
+# Try to check doc at: https://docspace.corp.redhat.com/docs/DOC-109952
 
 
 # Paths and others
 # set -e
 SCRIPT_PATH="$0"
 SCRIPT_DIR=${0%\/*}
-QALIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/../qalib/"}
-SVN_INIT_SCRIPT=${SVN_INIT_SCRIPT:-"${QALIB_DIR}/svn-init.sh"}
-DIST_DIFF_INIT_SCRIPT=${DIST_DIFF_INIT_SCRIPT:-"${QALIB_DIR}/dist-diff-init.sh"}
-DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${QALIB_DIR}/dist-diff.xml"}
-DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"${SCRIPT_DIR}/dist-diff-parse.sh"}
-TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"tattletale.groovy"}
+LIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/lib"}
+DISTDIFF_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/dist-diff"}
+SVN_INIT_SCRIPT=${SVN_INIT_SCRIPT:-"${LIB_DIR}/svn-init.sh"}
+DIST_DIFF_INIT_SCRIPT=${DIST_DIFF_INIT_SCRIPT:-"${DISTDIFF_DIR}/dist-diff-init.sh"}
+DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${DISTDIFF_DIR}/dist-diff.xml"}
+DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"${DISTDIFF_DIR}/dist-diff-parse.sh"}
+TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"${LIB_DIR}/tattletale.groovy"}
 ANT_BIN=${ANT_BIN:-ant} # in default taking ant from PATH
 GROOVY_BIN=${GROOVY_BIN:-groovy}
 GROOVY_JAR=$GROOVY_JAR
@@ -204,10 +206,6 @@ while [ $# -gt 0 ]; do
       	mkdir -p "$OUTPUT_DIR"
       fi
       ;;
-    -cp | -classpath | --classpath)
-      shift
-      CLASSPATH_ADD="$1"
-      ;;
     -d | -debug | --debug)
       IS_DEBUG=1
       ;;
@@ -221,12 +219,11 @@ while [ $# -gt 0 ]; do
       ;;
     -p | -prefix | --prefix)
       IS_PREFIXES=1
-      ;;
-    # TODO: add -classpath argument (?)       
+      ;;      
 
     -h | --help)
       echo "Usage:"
-      echo `basename $0` " [-udph] [-o output_dir] zip_file/dir/web_address"
+      echo `basename $0` " [-dpqh] [-o output_dir] zip_file/dir/web_address"
       echo -e "-o or --output dir           output directory (when not specifed then current dir will be used)"
       echo -e "-q or --quiet                quiet - no output messages please (not working properly)"
       echo -e "-d or --debug                debug mode on"
@@ -369,7 +366,7 @@ qalib_distdiff_init "$DIST_DIFF_DIR" DISTDIFF_JAR
 
 # checking existence of groovy jar
 if [ ! -f "$GROOVY_JAR" ]; then
-  GROOVY_JAR=`echo ${DIST_DIFF_DIR}/lib/"groovy*jar`  # trying to find groovy.jar in lib dir of dist-diff script
+  GROOVY_JAR=`echo "${DIST_DIFF_DIR}/lib/"groovy*jar`  # trying to find groovy.jar in lib dir of dist-diff script
   [ ! -f "$GROOVY_JAR" ] &&\
     error "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly. Exiting the script." &&\
     exit 1
@@ -426,9 +423,9 @@ for PREFIX in $PREFIXES; do
       NEW_BASENAME=`basename "$NEW"`
       DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG_BASENAME}--VS-${NEW_BASENAME}"
       $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG.log"
-      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.log created succesfully" || error "$DIST_DIFF_LOG.log not created correctly!" 
+      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.log created succesfully" || error "$DIST_DIFF_LOG.log created with errors! See above." 
       bash "$DIST_DIFF_PARSE_SCRIPT" -t "$DIST_DIFF_LOG.log" > "$DIST_DIFF_LOG.parsed.log"
-      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.parsed.log created succesfully" || error "$DIST_DIFF_LOG.parsed.log not created correctly!"
+      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.parsed.log created succesfully" || error "$DIST_DIFF_LOG.parsed.log not created correctly! See above."
       eecho "--------------------------------\n"
     done
   done

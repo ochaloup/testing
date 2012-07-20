@@ -146,7 +146,9 @@ unzip_jar() {
 
 create_tmp_dir() {
   if [ ! -d "$TMP_DIR" ]; then
-    TMP_DIR=`mktemp -d --suffix="#distdiff"`
+    # TMP_DIR=`mktemp -d --suffix="#distdiff"` # the suffix param is not available on all rhels
+    TMP_DIR=`mktemp -d`
+    [ $? -ne 0 ] && echo "Tmp dir cannot be created! Exiting this script." && exit 1
     echod "Tmp dir created: ${TMP_DIR}"
   fi
 }
