@@ -11,12 +11,14 @@ QALIB_DIR=${QALIB_DIR:-"${SCRIPT_DIR}/../qalib/"}
 SVN_INIT_SCRIPT=${SVN_INIT_SCRIPT:-"${QALIB_DIR}/svn-init.sh"}
 DIST_DIFF_INIT_SCRIPT=${DIST_DIFF_INIT_SCRIPT:-"${QALIB_DIR}/dist-diff-init.sh"}
 DIST_DIFF_ANT_XML=${DIST_DIFF_ANT_XML:-"${QALIB_DIR}/dist-diff.xml"}
-DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"dist-diff-parse.sh"}
+DIST_DIFF_PARSE_SCRIPT=${DIST_DIFF_PARSE_SCRIPT:-"${SCRIPT_DIR}/dist-diff-parse.sh"}
 TATTLETALE_SCRIPT=${TATTLETALE_SCRIPT:-"tattletale.groovy"}
 ANT_BIN=${ANT_BIN:-ant} # in default taking ant from PATH
 GROOVY_BIN=${GROOVY_BIN:-groovy}
-GROOVY_JAR=${GROOVY_JAR:-/usr/share/java/groovy.jar} # path to groovy.jar file 
-                                                     # in case that is not defined, trying to take from dist-diff svn
+GROOVY_JAR=$GROOVY_JAR
+ # in case that is not defined, trying to take from dist-diff svn
+[ "x$GROOVY_JAR" == "x" ] && GROOVY_JAR=`echo $GROOVY_HOME/lib/groovy*jar`  
+                                                     
 
 # what is working directory where all stuff will be put to
 OUTPUT_DIR=`pwd`
@@ -344,12 +346,12 @@ for DIR_TO_PROCESS in "${INPUT_DIRS[@]}"; do
 
   # MD5 checksums
   eecho "Calculating checksum on directory $DIR_TO_PROCESS"
-  MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5"
+  MD5_REPORT="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.md5.log"
   rm -rf "$MD5_REPORT"
   calculate_md5checksums "$DIR_TO_PROCESS" "$MD5_REPORT" '.*' 1  # all files (.*) and DIR_TO_PROCESS is root dir (1)
   clean_after_md5calculation "$DIR_TO_PROCESS" "$MD5_REPORT"
   # Filter for .class and .jar files
-  MD5_REPORT_JARS_FILTERED="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5"
+  MD5_REPORT_JARS_FILTERED="${OUTPUT_DIR}/${DIR_TO_PROCESS_BASENAME}.jars.md5.log"
   cat "$MD5_REPORT" | grep -e '\.class$\|\.jar$' > "$MD5_REPORT_JARS_FILTERED"
   eecho "MD5 checksum report created in $MD5_REPORT and $MD5_REPORT_JARS_FILTERED" 
 done
@@ -367,11 +369,12 @@ qalib_distdiff_init "$DIST_DIFF_DIR" DISTDIFF_JAR
 
 # checking existence of groovy jar
 if [ ! -f "$GROOVY_JAR" ]; then
-  GROOVY_JAR="${DIST_DIFF_DIR}/lib/groovy*jar" # trying to find groovy.jar in lib dir of dist-diff script
+  GROOVY_JAR=`echo ${DIST_DIFF_DIR}/lib/"groovy*jar`  # trying to find groovy.jar in lib dir of dist-diff script
   [ ! -f "$GROOVY_JAR" ] &&\
     error "Groovy lib jar was not found in $GROOVY_JAR. Set GROOVY_JAR env variable correctly. Exiting the script." &&\
     exit 1
 fi
+debug "Using groovy jar: $GROOVY_JAR" 
 
 # Process dist-diff script on directories with similar content filtered by prefix when -p is specifed
 # (July 2012) EWS seems  to be distributed with prefixes: jboss-ews-2.0.0, jboss-ews-application, jboss-ews-httpd
@@ -421,10 +424,11 @@ for PREFIX in $PREFIXES; do
       eecho "DIST DIFF between $ORIG and $NEW:" 
       ORIG_BASENAME=`basename "$ORIG"`
       NEW_BASENAME=`basename "$NEW"`
-      DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG_BASENAME}--VS-${NEW_BASENAME}.log"
-      $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG"
-      bash "$DIST_DIFF_PARSE_SCRIPT" -t "$DIST_DIFF_LOG" > "$DIST_DIFF_LOG.parsed"
-      eecho "Dist diff LOG created in $DIST_DIFF_LOG and $DIST_DIFF_LOG.parsed"
+      DIST_DIFF_LOG="${OUTPUT_DIR}/distdiff-${ORIG_BASENAME}--VS-${NEW_BASENAME}"
+      $ANT_BIN -f "$DIST_DIFF_ANT_XML" -Dgroovyjar="$GROOVY_JAR" -Ddistdiffjar="$DISTDIFF_JAR" -Doriginal="$ORIG" -Dnew="$NEW" > "$DIST_DIFF_LOG.log"
+      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.log created succesfully" || error "$DIST_DIFF_LOG.log not created correctly!" 
+      bash "$DIST_DIFF_PARSE_SCRIPT" -t "$DIST_DIFF_LOG.log" > "$DIST_DIFF_LOG.parsed.log"
+      [ $? -eq 0 ] && eecho "$DIST_DIFF_LOG.parsed.log created succesfully" || error "$DIST_DIFF_LOG.parsed.log not created correctly!"
       eecho "--------------------------------\n"
     done
   done

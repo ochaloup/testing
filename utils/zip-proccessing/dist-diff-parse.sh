@@ -299,6 +299,6 @@ done  < "${1:-/proc/${$}/fd/0}"
 
 # echo "TMP directory $TMP_DIR was not removed!"
 if [ -d "$TMP_DIR" ]; then
- echo "Removing everything from $TMP_DIR"
+ echod "Removing everything from tmp directory $TMP_DIR"
  rm -rf "$TMP_DIR"
 fi
