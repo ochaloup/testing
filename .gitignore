@@ -1,4 +1,6 @@
 .metadata/
+.classpath
+.settings/
 universityWorkshop-pv243/github/
 **/*class
 classes/

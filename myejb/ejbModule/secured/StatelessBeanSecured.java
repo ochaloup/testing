@@ -15,6 +15,7 @@ import org.jboss.logging.Logger;
 @Clustered
 @Stateless
 @SecurityDomain("other")
+// @SecurityDomain("myDomain")
 public class StatelessBeanSecured implements StatelessBeanRemote {
 	private static final Logger log = Logger.getLogger(StatelessBeanSecured.class);
 	

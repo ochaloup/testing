@@ -11,7 +11,7 @@ import ochaloup.StatelessBeanRemote;
 public class Client {
 
 	private static final String USER = "test";
-	private static final String PASS = "password";
+	private static final String PASS = "password1.";
 
 	
 	private static InitialContext getOldSchoolIC(String host, String port) throws NamingException {
@@ -55,6 +55,7 @@ public class Client {
 		InitialContext ic = null;
 		
 		String lookup = "myejb/StatelessBean!ochaloup.StatelessBeanRemote";
+		// String lookup = "myejb/StatelessBeanSecured!ochaloup.StatelessBeanRemote";
 		if(args.length > 0 && args[0].trim().equals("1")) {
 			ic = getOldSchoolIC(host, port);
 			bean = (StatelessBeanRemote) ic.lookup(lookup);
