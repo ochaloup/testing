@@ -1,0 +1,19 @@
+
+RULE kill JVM when killMe bean method is called
+CLASS org.jboss.qa.TestStatelessBean
+METHOD killMe()
+BIND NOTHING
+IF TRUE
+DO debug("!!!killing JVM!!!"),
+   killJVM()
+ENDRULE
+
+RULE bz1023053
+INTERFACE org.jboss.tm.XAResourceRecoveryRegistry
+METHOD removeXAResourceRecovery
+AT ENTRY
+BIND NOTHING
+IF TRUE
+DO debug("!!!removeXAResourceRecovery - sleeping!!!"),
+   Thread.sleep(5000)
+ENDRULE
